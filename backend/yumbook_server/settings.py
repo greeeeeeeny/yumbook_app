@@ -25,8 +25,20 @@ SECRET_KEY = "django-insecure-4d92t(pl7i=_as^u&by8@r4xtey!!@u47az*^f!l4bq+m+t&*0
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+'''
+# ALLOWED_HOSTS = []
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:59836/", # 리액트 개발 서버 주소
+]
+'''
 
+## 개발 중 (모든 요청 허용)
+CORS_ALLOW_ALL_ORIGINS = True
+
+## 배포 시 (Flutter 앱 도메인만 허용)
+CORS_ALLOWED_ORIGINS = [
+    "https://myapp.com",
+]
 
 # Application definition
 
@@ -37,9 +49,12 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "rest_framework",
+    "corsheaders"
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
