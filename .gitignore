@@ -54,3 +54,16 @@ backend/venv/
 
 # Local database
 backend/db.sqlite3
+
+# Monorepo: Flutter build/platform artifacts under frontend/
+**/build/
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
+
+# Local Flutter SDK install (codespace-only)
+.flutter-sdk/
+
+# Misc local notes (not for repo)
+claude.md
+.bash_profile.swp
