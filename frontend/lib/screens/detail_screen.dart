@@ -14,8 +14,8 @@ import 'package:yumbook_app/screens/payment/payment_register_screen.dart';
 import 'package:yumbook_app/widgets/bottom_sheet_description.dart';
 import 'package:yumbook_app/widgets/booking_details_sheet.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:yumbook_app/state/saved_restaurants_store.dart';
-import 'package:yumbook_app/state/user_session_store.dart';
 
 class AHome11CardDetail extends StatelessWidget {
   final Restaurant restaurant;
@@ -174,12 +174,9 @@ Widget _circleAssetButton({
             ),
             const SizedBox(width: 12),
             AnimatedBuilder(
-              animation: Listenable.merge([
-                UserSessionStore.instance,
-                SavedRestaurantsStore.instance,
-              ]),
+              animation: SavedRestaurantsStore.instance,
               builder: (context, _) {
-                final user = UserSessionStore.instance.currentUser;
+                final user = Supabase.instance.client.auth.currentUser;
 
                 final isSaved = user != null &&
                     SavedRestaurantsStore.instance.isSaved(
@@ -191,7 +188,8 @@ Widget _circleAssetButton({
                   children: [
                     IconButton(
                       onPressed: () {
-                        final currentUser = UserSessionStore.instance.currentUser;
+                        final currentUser =
+                            Supabase.instance.client.auth.currentUser;
 
                         if (currentUser == null) {
                           ScaffoldMessenger.of(context).showSnackBar(

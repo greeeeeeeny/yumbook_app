@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:yumbook_app/models/restaurant.dart';
 import 'package:yumbook_app/state/saved_restaurants_store.dart';
-import 'package:yumbook_app/state/user_session_store.dart';
 
 class SavedRestaurantScreen extends StatelessWidget {
   const SavedRestaurantScreen({super.key});
@@ -17,7 +17,7 @@ class SavedRestaurantScreen extends StatelessWidget {
     return AnimatedBuilder(
       animation: SavedRestaurantsStore.instance,
       builder: (context, _) {
-        final currentUser = UserSessionStore.instance.currentUser;
+        final currentUser = Supabase.instance.client.auth.currentUser;
 
         if (currentUser == null) {
           return const Scaffold(
