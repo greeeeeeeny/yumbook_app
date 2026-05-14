@@ -1,0 +1,14 @@
+services:
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - backend-db:/app/data
+    environment:
+      DJANGO_DEBUG: "1"
+
+volumes:
+  backend-db:

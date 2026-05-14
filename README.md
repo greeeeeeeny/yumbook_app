@@ -1,87 +1,87 @@
-# yumbook_app
-1. 서비스 개요
+# YumBook
 
-YumBook은 사용자가 맛집, 메뉴, 레시피, 식사 경험을 기록하고 공유할 수 있는 음식 기반 기록 서비스이다.
+음식 기반 기록·예약 서비스. Flutter 앱 + Django REST API + Supabase Auth 구성의 모노레포.
 
-2. 주요 사용자
-일반 사용자
-음식 리뷰 작성자
-맛집 탐색 사용자
-관리자
-3. Use Case 1: 회원가입 및 로그인
+## 디렉토리 구조
 
-Actor: 사용자
-Goal: YumBook 서비스를 이용하기 위해 계정을 생성하거나 로그인한다.
+```
+yumbook_app/
+├── frontend/          # Flutter 앱 (package: yumbook_app)
+│   ├── lib/           # Dart 소스
+│   ├── android/ ios/ web/ macos/ linux/ windows/
+│   ├── assets/
+│   └── pubspec.yaml
+├── backend/           # Django REST API
+│   ├── yumbook_server/    # Django 프로젝트 설정
+│   ├── reservations/      # Django 앱 (모델/시리얼라이저/뷰셋)
+│   ├── supabase_client.py # Supabase 클라이언트 헬퍼
+│   ├── manage.py
+│   ├── requirements.txt
+│   └── Dockerfile
+├── shared/            # 언어 무관 API 계약
+│   └── api/           # OpenAPI 스펙 등 (예정)
+├── docker/            # Docker 보조 설정
+├── docker-compose.yml # 로컬 풀스택 구동
+├── scripts/           # 개발/테스트 스크립트
+└── README.md
+```
 
-Scenario:
+## 빠른 시작
 
-사용자는 YumBook 앱 또는 웹사이트에 접속한다.
-회원가입 버튼을 선택한다.
-이메일, 비밀번호, 닉네임을 입력한다.
-시스템은 입력 정보를 검증한다.
-회원가입이 완료되면 사용자는 로그인한다.
-시스템은 사용자 메인 화면을 보여준다.
-4. Use Case 2: 음식 기록 작성
+### 백엔드만 (Django dev server)
 
-Actor: 사용자
-Goal: 먹은 음식이나 방문한 식당을 기록한다.
+```bash
+./scripts/dev_backend.sh
+# http://127.0.0.1:8000/api/reservations/
+```
 
-Scenario:
+### 프론트엔드만 (Flutter web)
 
-사용자는 “기록 작성” 버튼을 누른다.
-음식 사진을 업로드한다.
-음식 이름, 식당명, 위치, 가격, 평점을 입력한다.
-맛, 분위기, 재방문 의사 등을 작성한다.
-공개 여부를 선택한다.
-저장 버튼을 누른다.
-시스템은 기록을 저장하고 피드에 반영한다.
-5. Use Case 3: 맛집 검색
+```bash
+./scripts/dev_frontend.sh
+```
 
-Actor: 사용자
-Goal: 원하는 지역이나 음식 종류의 맛집을 찾는다.
+### 풀스택 (Docker)
 
-Scenario:
+```bash
+cp backend/.env.example backend/.env   # 값 채우기
+docker compose up backend
+```
 
-사용자는 검색창에 키워드를 입력한다.
-예: “홍대 파스타”, “강남 혼밥”
-시스템은 관련 음식 기록과 식당 정보를 보여준다.
-사용자는 평점, 거리, 최신순으로 결과를 정렬한다.
-원하는 식당을 선택해 상세 정보를 확인한다.
-6. Use Case 4: 리뷰 좋아요 및 댓글 작성
+### 테스트
 
-Actor: 사용자
-Goal: 다른 사용자의 음식 기록에 반응한다.
+```bash
+./scripts/test_all.sh                  # Django 테스트 + Flutter analyze
+```
 
-Scenario:
+## 인증 흐름
 
-사용자는 다른 사용자의 음식 기록을 확인한다.
-마음에 드는 게시글에 좋아요를 누른다.
-댓글 입력창에 의견을 작성한다.
-시스템은 댓글을 저장하고 게시글 작성자에게 알림을 보낸다.
-7. Use Case 5: 내 맛집 컬렉션 관리
+1. Flutter 가 `supabase_flutter` 로 Supabase Auth 에 직접 로그인 → access_token 획득
+2. Django 호출 시 `Authorization: Bearer <token>` 헤더 동봉
+3. 백엔드 `reservations/authentication.py` 의 `SupabaseAuthentication` 이
+   Supabase 에 토큰 검증 후 `request.user.id` 로 사용자 식별
 
-Actor: 사용자
-Goal: 관심 있는 맛집이나 음식 기록을 저장한다.
+## 기술 스택
 
-Scenario:
+- **Frontend**: Flutter 3.x, Dart, Riverpod, go_router, Supabase Auth (`supabase_flutter`), `http`
+- **Backend**: Django 6 + DRF, SQLite (dev), Supabase Auth 위임
+- **Auth/Storage**: Supabase
+- **DevOps**: Docker, GitHub Actions (예정)
 
-사용자는 게시글 또는 식당 상세 페이지를 확인한다.
-“저장” 버튼을 누른다.
-저장할 컬렉션을 선택한다.
-예: “가보고 싶은 곳”, “데이트 맛집”, “혼밥 리스트”
-시스템은 해당 항목을 컬렉션에 저장한다.
-8. Use Case 6: 관리자 게시글 관리
+## 서비스 개요
 
-Actor: 관리자
-Goal: 부적절한 게시글이나 댓글을 관리한다.
+YumBook 은 사용자가 맛집·메뉴·식사 경험을 기록하고 공유하며, 식당 예약까지 수행할 수 있는 서비스입니다.
 
-Scenario:
+### 주요 사용자
+- 일반 사용자 (음식 기록·예약)
+- 음식 리뷰 작성자
+- 맛집 탐색 사용자
+- 관리자
 
-관리자는 관리자 페이지에 로그인한다.
-신고된 게시글 목록을 확인한다.
-게시글 내용을 검토한다.
-문제가 있는 경우 게시글을 숨김 또는 삭제 처리한다.
-시스템은 처리 결과를 기록한다.
-대표 시나리오 요약
-
-사용자는 YumBook에 로그인한 뒤 오늘 먹은 음식을 사진과 함께 기록한다. 이후 다른 사용자의 맛집 리뷰를 검색하고, 마음에 드는 식당을 자신의 컬렉션에 저장한다. 다른 사용자는 해당 기록에 좋아요와 댓글을 남길 수 있으며, 관리자는 부적절한 콘텐츠를 관리한다.
+### 핵심 시나리오
+1. **회원가입/로그인** — Supabase OTP/비밀번호 인증
+2. **음식 기록 작성** — 사진·평점·후기 업로드
+3. **맛집 검색** — 키워드/지역/필터
+4. **리뷰 좋아요·댓글** — 사회적 상호작용
+5. **컬렉션 관리** — 가보고 싶은 곳, 데이트 맛집 등 저장
+6. **식당 예약** — 날짜·인원 선택 후 Django 백엔드로 저장 (`/api/reservations/`)
