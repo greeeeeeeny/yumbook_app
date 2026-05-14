@@ -30,17 +30,6 @@ class ReservationViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user.id)
 
 
-@api_view(["GET"])
-@authentication_classes([SupabaseAuthentication])
-@permission_classes([IsAuthenticated])
-def get_reservations(request):
-    reservations = Reservation.objects.filter(user=request.user.id).order_by(
-        "-created_at"
-    )
-    serializer = ReservationSerializer(reservations, many=True)
-    return Response(serializer.data)
-
-
 def _get_supabase_client():
     try:
         from supabase_client import get_supabase_client
