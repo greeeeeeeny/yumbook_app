@@ -1,7 +1,13 @@
-from django.urls import path
-from . import views
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
+
+from .views import ReservationViewSet, login, signup
+
+router = DefaultRouter()
+router.register("reservations", ReservationViewSet, basename="reservation")
 
 urlpatterns = [
-    path('api/signup/', views.signup),
-    path('api/login/',  views.login),
+    path("", include(router.urls)),
+    path("signup/", signup, name="signup"),
+    path("login/", login, name="login"),
 ]

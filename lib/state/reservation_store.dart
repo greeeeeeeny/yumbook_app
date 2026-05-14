@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:yumbook_app/models/reservation_data.dart';
+import 'package:yumbook_app/services/django_reservation_api.dart';
 
 class NotifyRequest {
   final String restaurantId;
@@ -23,9 +25,32 @@ class ReservationStore extends ChangeNotifier {
 
   final List<ReservationData> _reservations = [];
   final List<NotifyRequest> _notifyRequests = [];
+  final DjangoReservationApi _api = DjangoReservationApi();
+  bool _isLoading = false;
 
   List<ReservationData> get reservations => List.unmodifiable(_reservations);
   List<NotifyRequest> get notifyRequests => List.unmodifiable(_notifyRequests);
+  bool get isLoading => _isLoading;
+
+  Future<void> loadReservations() async {
+    final token = _currentAccessToken();
+    if (token == null) {
+      throw StateError('No Supabase session — sign in before loading reservations.');
+    }
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final loaded = await _api.fetchReservations(accessToken: token);
+      _reservations
+        ..clear()
+        ..addAll(loaded);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   /// ✅ 디버그용: Upcoming 테스트 예약 1개 생성
   void addMockReservation() {
@@ -52,6 +77,24 @@ class ReservationStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<ReservationData> createReservation(ReservationData data) async {
+    final token = _currentAccessToken();
+    if (token == null) {
+      throw StateError('No Supabase session — sign in before creating a reservation.');
+    }
+
+    final saved = await _api.createReservation(
+      reservation: data,
+      accessToken: token,
+    );
+    addReservation(saved);
+    return saved;
+  }
+
+  String? _currentAccessToken() {
+    return Supabase.instance.client.auth.currentSession?.accessToken;
+  }
+
   void removeReservationByConfirmation(String confirmationCode) {
     _reservations.removeWhere((r) => r.confirmationCode == confirmationCode);
     notifyListeners();
@@ -75,8 +118,9 @@ class ReservationStore extends ChangeNotifier {
   /// ✅ 예약 변경 가능 여부
   /// 예약 시각 기준 24시간 이상 남아 있어야 변경 가능
   bool canEditReservation(ReservationData reservation) {
-    final hoursLeft =
-        _reservationDateTime(reservation).difference(DateTime.now()).inHours;
+    final hoursLeft = _reservationDateTime(
+      reservation,
+    ).difference(DateTime.now()).inHours;
     return hoursLeft >= 24;
   }
 
@@ -152,9 +196,7 @@ class ReservationStore extends ChangeNotifier {
       date: pending.requestedDate,
       time: pending.requestedTime,
       partySize: pending.requestedPartySize,
-      pendingChange: pending.copyWith(
-        status: ReservationChangeStatus.approved,
-      ),
+      pendingChange: pending.copyWith(status: ReservationChangeStatus.approved),
     );
 
     notifyListeners();
@@ -172,9 +214,7 @@ class ReservationStore extends ChangeNotifier {
     if (pending == null) return;
 
     _reservations[idx] = current.copyWith(
-      pendingChange: pending.copyWith(
-        status: ReservationChangeStatus.rejected,
-      ),
+      pendingChange: pending.copyWith(status: ReservationChangeStatus.rejected),
     );
 
     notifyListeners();
@@ -190,9 +230,7 @@ class ReservationStore extends ChangeNotifier {
 
     final current = _reservations[idx];
 
-    _reservations[idx] = current.copyWith(
-      clearPendingChange: true,
-    );
+    _reservations[idx] = current.copyWith(clearPendingChange: true);
 
     notifyListeners();
   }

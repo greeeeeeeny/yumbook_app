@@ -5,13 +5,11 @@ import 'package:yumbook_app/themes/app_spacing.dart';
 import 'package:yumbook_app/data/mock_restaurants.dart';
 import 'package:yumbook_app/models/restaurant.dart';
 import 'package:yumbook_app/models/reservation_data.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:yumbook_app/state/reservation_store.dart';
 
-// ✅ Explore로 이동시키고 싶다면 import 경로만 맞춰주세요.
-import 'package:yumbook_app/screens/explore_screen.dart';
 import 'package:yumbook_app/screens/root_shell.dart';
 import 'package:yumbook_app/screens/reservation_details_screen.dart';
-
 
 enum _ReserveTab { upcoming, past, notify }
 
@@ -25,54 +23,28 @@ class ReserveScreen extends StatefulWidget {
 class _ReserveScreenState extends State<ReserveScreen> {
   _ReserveTab _tab = _ReserveTab.upcoming;
 
-  bool _seeded = false; // ✅ 한번만 넣기 위한 플래그
+  bool _loadedReservations = false;
 
-  static const _bgSegment = Color(0x1E767680); // 피그마 느낌
-  static const _orange = Color(0xFFD45425);
-  static const _border = Color(0xFFE5E5EA);
-  static const _textDark = Color(0xFF383838);
-
-    @override
+  @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _seedMockUpcomingIfNeeded();
+      _loadReservationsFromServer();
     });
   }
 
-  void _seedMockUpcomingIfNeeded() {
-    if (_seeded) return;
+  Future<void> _loadReservationsFromServer() async {
+    if (_loadedReservations) return;
+    _loadedReservations = true;
 
-    final store = ReservationStore.instance;
-    if (store.reservations.isNotEmpty) {
-      _seeded = true;
-      return;
+    if (Supabase.instance.client.auth.currentSession == null) return;
+
+    try {
+      await ReservationStore.instance.loadReservations();
+    } catch (e) {
+      debugPrint('Failed to load reservations from Django: $e');
     }
-
-    // ✅ mockRestaurants의 실제 id를 쓰면 location/image가 바로 뜸
-    final r = mockRestaurants.isNotEmpty ? mockRestaurants.first : null;
-
-    final now = DateTime.now();
-    final baseDate = DateTime(now.year, now.month, now.day + 3);
-
-    for (int i = 0; i < 4; i++) {
-      store.addReservation(
-        ReservationData(
-          restaurantName: r?.name ?? '1993 Gogi',
-          restaurantId: r?.id, // ✅ null 가능
-          date: baseDate.add(Duration(days: i)),
-          time: DateTime(now.year, now.month, now.day, 17, 30), // 5:30 PM
-          partySize: 4,
-          guestName: 'Youri Choi',
-          seatType: 'Table',
-          confirmationCode: 'YB-MOCK-${now.millisecondsSinceEpoch}-$i',
-          paymentSnapshot: null,
-        ),
-      );
-    }
-
-    _seeded = true;
   }
 
   @override
@@ -89,7 +61,7 @@ class _ReserveScreenState extends State<ReserveScreen> {
             final upcoming = store.upcoming(now);
             final past = store.past(now);
             final notify = store.notifyRequests;
-              debugPrint('notify count = ${notify.length}');
+            debugPrint('notify count = ${notify.length}');
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -121,20 +93,29 @@ class _ReserveScreenState extends State<ReserveScreen> {
                       builder: (_) {
                         switch (_tab) {
                           case _ReserveTab.upcoming:
+                            if (store.isLoading) {
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            }
                             if (upcoming.isEmpty) {
                               return _EmptyUpcoming(
                                 onSearchNow: () {
-                                    rootShellKey.currentState?.goToTab(1); // Explore가 index 1 이니까
+                                  rootShellKey.currentState?.goToTab(
+                                    1,
+                                  ); // Explore가 index 1 이니까
                                 },
                               );
                             }
                             return _ReservationList(
                               items: upcoming,
                               onTapCard: (r) {
-                              Navigator.push(
+                                Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => ReservationDetailsScreen(reservation: r),
+                                    builder: (_) => ReservationDetailsScreen(
+                                      reservation: r,
+                                    ),
                                   ),
                                 );
                               },
@@ -145,7 +126,8 @@ class _ReserveScreenState extends State<ReserveScreen> {
                               return _SimpleEmpty(
                                 icon: Icons.history,
                                 title: 'No past bookings',
-                                body: 'Your completed reservations will appear here.',
+                                body:
+                                    'Your completed reservations will appear here.',
                               );
                             }
                             return _ReservationList(
@@ -160,7 +142,8 @@ class _ReserveScreenState extends State<ReserveScreen> {
                               return _SimpleEmpty(
                                 icon: Icons.notifications_none,
                                 title: 'No notifications',
-                                body: 'When you request a notify for a time slot, it will show up here.',
+                                body:
+                                    'When you request a notify for a time slot, it will show up here.',
                               );
                             }
                             return _NotifyList(items: notify);
@@ -182,13 +165,9 @@ class _SegmentedTabs extends StatelessWidget {
   final _ReserveTab value;
   final ValueChanged<_ReserveTab> onChanged;
 
-  const _SegmentedTabs({
-    required this.value,
-    required this.onChanged,
-  });
+  const _SegmentedTabs({required this.value, required this.onChanged});
 
   static const _bg = Color(0x1E767680);
-  static const _divider = Color(0xFF8E8E93);
 
   @override
   Widget build(BuildContext context) {
@@ -207,10 +186,6 @@ class _SegmentedTabs extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Widget _vDivider({Color? color}) {
-    return Container(width: 1, margin: const EdgeInsets.symmetric(vertical: 2), color: color);
   }
 
   Widget _segBtn(String label, _ReserveTab tab) {
@@ -265,7 +240,11 @@ class _EmptyUpcoming extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.calendar_today_outlined, size: 22, color: Colors.black54),
+            const Icon(
+              Icons.calendar_today_outlined,
+              size: 22,
+              color: Colors.black54,
+            ),
             const SizedBox(height: 12),
             const Text(
               'No upcoming bookings',
@@ -322,43 +301,40 @@ class _EmptyUpcoming extends StatelessWidget {
   }
 }
 
-  class _ReservationList extends StatelessWidget {
-    final List<ReservationData> items;
-    final ValueChanged<ReservationData> onTapCard;
+class _ReservationList extends StatelessWidget {
+  final List<ReservationData> items;
+  final ValueChanged<ReservationData> onTapCard;
 
-    const _ReservationList({
-      required this.items,
-      required this.onTapCard,
-    });
+  const _ReservationList({required this.items, required this.onTapCard});
 
-    @override
-    Widget build(BuildContext context) {
-      return ListView.separated(
-        padding: const EdgeInsets.only(top: 2, bottom: 16),
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, i) {
-          final r = items[i];
-          final restaurant = _findRestaurant(r.restaurantId);
-          return _ReservationCard(
-            reservation: r,
-            restaurant: restaurant,
-            onTap: () => onTapCard(r),
-          );
-        },
-      );
-    }
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.only(top: 2, bottom: 16),
+      itemCount: items.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, i) {
+        final r = items[i];
+        final restaurant = _findRestaurant(r.restaurantId);
+        return _ReservationCard(
+          reservation: r,
+          restaurant: restaurant,
+          onTap: () => onTapCard(r),
+        );
+      },
+    );
+  }
 
-    // ✅ 해결방법 A: 여기! String? 받도록 수정
-    Restaurant? _findRestaurant(String? id) {
-      if (id == null || id.trim().isEmpty) return null;
-      try {
-        return mockRestaurants.firstWhere((e) => e.id == id);
-      } catch (_) {
-        return null;
-      }
+  // ✅ 해결방법 A: 여기! String? 받도록 수정
+  Restaurant? _findRestaurant(String? id) {
+    if (id == null || id.trim().isEmpty) return null;
+    try {
+      return mockRestaurants.firstWhere((e) => e.id == id);
+    } catch (_) {
+      return null;
     }
   }
+}
 
 class _ReservationCard extends StatelessWidget {
   final ReservationData reservation;
@@ -372,7 +348,6 @@ class _ReservationCard extends StatelessWidget {
   });
 
   static const _border = Color(0xFFE5E5EA);
-  static const _title = Color(0xFF383838);
 
   String _dateTimeText() {
     final d = DateFormat('MMM d, yyyy').format(reservation.date);
@@ -406,7 +381,8 @@ class _ReservationCard extends StatelessWidget {
             Expanded(
               child: _CardTextBlock(
                 title: reservation.restaurantName,
-                line1: '${reservation.partySize} guests for ${reservation.guestName}',
+                line1:
+                    '${reservation.partySize} guests for ${reservation.guestName}',
                 line2: _dateTimeText(),
                 line3: _locationText(),
               ),
@@ -422,7 +398,7 @@ class _ReservationCard extends StatelessWidget {
                     ? Image.asset(imagePath, fit: BoxFit.cover)
                     : const SizedBox.shrink(),
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -505,7 +481,7 @@ class _NotifyList extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.only(top: 2, bottom: 16),
       itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, i) {
         final n = items[i];
 

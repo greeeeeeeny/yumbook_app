@@ -8,6 +8,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import 'package:yumbook_app/models/reservation_data.dart';
 import 'package:yumbook_app/screens/booking/reservation_details_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:yumbook_app/state/reservation_store.dart';
 
 class CompleteReservationScreen extends StatefulWidget {
@@ -16,7 +17,8 @@ class CompleteReservationScreen extends StatefulWidget {
   const CompleteReservationScreen({super.key, required this.data});
 
   @override
-  State<CompleteReservationScreen> createState() => _CompleteReservationScreenState();
+  State<CompleteReservationScreen> createState() =>
+      _CompleteReservationScreenState();
 }
 
 class _CompleteReservationScreenState extends State<CompleteReservationScreen> {
@@ -32,8 +34,13 @@ class _CompleteReservationScreenState extends State<CompleteReservationScreen> {
   // -------------------------
   bool _agreeTexts = false;
   bool _consentMarketing = false;
+  bool _isSubmitting = false;
 
-  bool get _canComplete => _agreeTexts && _consentMarketing && _remainingSeconds > 0;
+  bool get _canComplete =>
+      _agreeTexts &&
+      _consentMarketing &&
+      _remainingSeconds > 0 &&
+      !_isSubmitting;
 
   @override
   void initState() {
@@ -58,7 +65,9 @@ class _CompleteReservationScreenState extends State<CompleteReservationScreen> {
         t.cancel();
         setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Reservation hold expired. Please start again.')),
+          const SnackBar(
+            content: Text('Reservation hold expired. Please start again.'),
+          ),
         );
         return;
       }
@@ -77,37 +86,65 @@ class _CompleteReservationScreenState extends State<CompleteReservationScreen> {
     final uri = Uri.parse(url);
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to open the link.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to open the link.')));
     }
   }
 
-    void _onComplete() {
-      if (!_canComplete) return;
+  Future<void> _onComplete() async {
+    if (!_canComplete) return;
 
-      // ✅ (1) Reserve Upcoming에 저장: 이 줄이 핵심 위치
-      ReservationStore.instance.addReservation(widget.data);
-
-      // ✅ (2) 완료 안내(선택)
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reservation confirmed.')),
+        const SnackBar(content: Text('Please log in before booking.')),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final saved = await ReservationStore.instance.createReservation(
+        widget.data,
       );
 
-      // ✅ (3) 상세 화면으로 이동(지금처럼)
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Reservation confirmed.')));
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => ReservationDetailsScreen(data: widget.data),
+          builder: (_) => ReservationDetailsScreen(data: saved),
         ),
       );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to confirm reservation: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
+  }
 
   // -------------------------
   // Styling helpers
   // -------------------------
-  TextStyle get _muted14 => const TextStyle(color: Color(0xFF6E6E6E), fontSize: 14);
-  TextStyle get _title18 => const TextStyle(color: Color(0xFF1E1E1E), fontSize: 18, fontWeight: FontWeight.w600);
+  TextStyle get _muted14 =>
+      const TextStyle(color: Color(0xFF6E6E6E), fontSize: 14);
+  TextStyle get _title18 => const TextStyle(
+    color: Color(0xFF1E1E1E),
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -131,7 +168,10 @@ class _CompleteReservationScreenState extends State<CompleteReservationScreen> {
               children: const [
                 Icon(Icons.arrow_back, color: Colors.black),
                 SizedBox(width: 4),
-                Text('Cancel', style: TextStyle(color: Colors.black, fontSize: 16)),
+                Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.black, fontSize: 16),
+                ),
               ],
             ),
           ),
@@ -139,7 +179,11 @@ class _CompleteReservationScreenState extends State<CompleteReservationScreen> {
 
         title: const Text(
           'Confirm',
-          style: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
 
@@ -168,14 +212,33 @@ class _CompleteReservationScreenState extends State<CompleteReservationScreen> {
                   onPressed: _canComplete ? _onComplete : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFD45425),
-                    disabledBackgroundColor: const Color(0xFFD45425).withOpacity(0.35),
+                    disabledBackgroundColor: const Color(
+                      0xFFD45425,
+                    ).withValues(alpha: 0.35),
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
-                  child: const Text(
-                    'Complete reservation',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : const Text(
+                          'Complete reservation',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -235,106 +298,113 @@ class _CompleteReservationScreenState extends State<CompleteReservationScreen> {
   }
 
   Widget _reservationCard() {
-  final seatType = widget.data.seatType; // ✅ optional
+    final seatType = widget.data.seatType; // ✅ optional
 
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-    child: Container(
-      padding: const EdgeInsets.all(16),
-      decoration: ShapeDecoration(
-        shape: RoundedRectangleBorder(
-          side: const BorderSide(width: 1, color: Color(0xFFE5E5EA)),
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // LEFT (text + svg rows)
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.data.restaurantName, // ✅ 하드코딩 제거
-                  style: const TextStyle(
-                    color: Color(0xFF383838),
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                _svgRow(
-                  'assets/icons/party.svg',
-                  '${widget.data.partySize} guests for ${widget.data.guestName}', // ✅ 하드코딩 제거
-                ),
-                const SizedBox(height: 10),
-
-                // ✅ seatType optional: 값 있을 때만 표시
-                if (seatType != null && seatType.trim().isNotEmpty) ...[
-                  _svgRow('assets/icons/table.svg', seatType.trim()),
-                  const SizedBox(height: 10),
-                ],
-
-                _svgRow(
-                  'assets/icons/time.svg',
-                  '${widget.data.formattedDate} at ${widget.data.formattedTime}',
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // RIGHT (small image)
-          ClipRRect(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: ShapeDecoration(
+          shape: RoundedRectangleBorder(
+            side: const BorderSide(width: 1, color: Color(0xFFE5E5EA)),
             borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              "https://placehold.co/104x139", // TODO: 나중에 restaurant imageUrl로 서버, 스토리지 URL연결
-              width: 64,
-              height: 64,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                width: 64,
-                height: 64,
-                color: const Color(0xFFEDEDED),
-                alignment: Alignment.center,
-                child: const Icon(Icons.image_not_supported, size: 18, color: Color(0xFF9E9E9E)),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // LEFT (text + svg rows)
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.data.restaurantName, // ✅ 하드코딩 제거
+                    style: const TextStyle(
+                      color: Color(0xFF383838),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  _svgRow(
+                    'assets/icons/party.svg',
+                    '${widget.data.partySize} guests for ${widget.data.guestName}', // ✅ 하드코딩 제거
+                  ),
+                  const SizedBox(height: 10),
+
+                  // ✅ seatType optional: 값 있을 때만 표시
+                  if (seatType != null && seatType.trim().isNotEmpty) ...[
+                    _svgRow('assets/icons/table.svg', seatType.trim()),
+                    const SizedBox(height: 10),
+                  ],
+
+                  _svgRow(
+                    'assets/icons/time.svg',
+                    '${widget.data.formattedDate} at ${widget.data.formattedTime}',
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
 
-Widget _svgRow(String assetPath, String text) {
-  return Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      SvgPicture.asset(
-        assetPath,
-        width: 18,
-        height: 18,
-        // ✅ 색이 이미 SVG 안에 들어있으면 colorFilter 제거
-        colorFilter: const ColorFilter.mode(Color(0xFF6E6E6E), BlendMode.srcIn),
-      ),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          text,
-          style: const TextStyle(
-            color: Color(0xFF303030),
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
+            const SizedBox(width: 12),
+
+            // RIGHT (small image)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                "https://placehold.co/104x139", // TODO: 나중에 restaurant imageUrl로 서버, 스토리지 URL연결
+                width: 64,
+                height: 64,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 64,
+                  height: 64,
+                  color: const Color(0xFFEDEDED),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.image_not_supported,
+                    size: 18,
+                    color: Color(0xFF9E9E9E),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-    ],
-  );
-}
+    );
+  }
+
+  Widget _svgRow(String assetPath, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SvgPicture.asset(
+          assetPath,
+          width: 18,
+          height: 18,
+          // ✅ 색이 이미 SVG 안에 들어있으면 colorFilter 제거
+          colorFilter: const ColorFilter.mode(
+            Color(0xFF6E6E6E),
+            BlendMode.srcIn,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Color(0xFF303030),
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _agreements() {
     // ✅ 체크박스 2개 + 텍스트 (두번째 이미지처럼)
@@ -345,7 +415,8 @@ Widget _svgRow(String assetPath, String text) {
           _checkboxRow(
             value: _agreeTexts,
             onChanged: (v) => setState(() => _agreeTexts = v ?? false),
-            text: 'I agree to receive text messages from yumbook related to this reservation.',
+            text:
+                'I agree to receive text messages from yumbook related to this reservation.',
           ),
           const SizedBox(height: 10),
           _checkboxRow(
@@ -388,7 +459,10 @@ Widget _svgRow(String assetPath, String text) {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Cancellation policy', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const Text(
+            'Cancellation policy',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 8),
           Text(
             'Your reservation can be canceled at any time before the scheduled reservation time should your plans change.\n'
@@ -408,7 +482,11 @@ Widget _svgRow(String assetPath, String text) {
     const privacyUrl = 'https://www.yumbook.io/privacy-policy';
 
     // "Terms of Use and Privacy Policy"를 2개로 나누어 각각 링크 처리
-    final baseStyle = const TextStyle(color: Color(0xFF6E6E6E), fontSize: 12, height: 1.35);
+    final baseStyle = const TextStyle(
+      color: Color(0xFF6E6E6E),
+      fontSize: 12,
+      height: 1.35,
+    );
     final linkStyle = const TextStyle(
       color: Color(0xFF6E6E6E),
       fontSize: 12,
@@ -423,12 +501,16 @@ Widget _svgRow(String assetPath, String text) {
         TextSpan(
           style: baseStyle,
           children: [
-            const TextSpan(text: 'By completing your reservation, you acknowledge that you have '),
+            const TextSpan(
+              text:
+                  'By completing your reservation, you acknowledge that you have ',
+            ),
 
             TextSpan(
               text: 'read the restaurant’s cancellation policy',
               style: linkStyle,
-              recognizer: TapGestureRecognizer()..onTap = () => _openUrl(cancellationUrl),
+              recognizer: TapGestureRecognizer()
+                ..onTap = () => _openUrl(cancellationUrl),
             ),
 
             const TextSpan(text: ' and agree to the '),
@@ -436,7 +518,8 @@ Widget _svgRow(String assetPath, String text) {
             TextSpan(
               text: 'Terms of Use',
               style: linkStyle,
-              recognizer: TapGestureRecognizer()..onTap = () => _openUrl(termsUrl),
+              recognizer: TapGestureRecognizer()
+                ..onTap = () => _openUrl(termsUrl),
             ),
 
             const TextSpan(text: ' and '),
@@ -444,11 +527,17 @@ Widget _svgRow(String assetPath, String text) {
             TextSpan(
               text: 'Privacy Policy',
               style: linkStyle,
-              recognizer: TapGestureRecognizer()..onTap = () => _openUrl(privacyUrl),
+              recognizer: TapGestureRecognizer()
+                ..onTap = () => _openUrl(privacyUrl),
             ),
 
-            const TextSpan(text: '.\nStandard text message and data rates may apply.\n'),
-            const TextSpan(text: 'You can opt out of receiving messages at any time by texting “END.”'),
+            const TextSpan(
+              text: '.\nStandard text message and data rates may apply.\n',
+            ),
+            const TextSpan(
+              text:
+                  'You can opt out of receiving messages at any time by texting “END.”',
+            ),
           ],
         ),
       ),
