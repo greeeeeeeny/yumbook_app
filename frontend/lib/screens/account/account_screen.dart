@@ -4,6 +4,7 @@ import 'package:yumbook_app/screens/account/my_profile_screen.dart';
 import 'package:yumbook_app/state/user_profile_store.dart';
 import 'package:yumbook_app/screens/account/saved_restaurants_screen.dart';
 import 'package:yumbook_app/screens/account/transactions_screen.dart';
+import 'package:yumbook_app/screens/food_records/food_record_list_screen.dart';
 import 'package:yumbook_app/screens/payment/payment_register_screen.dart';
 import 'package:yumbook_app/screens/account/notification_settings_screen.dart';
 import 'package:yumbook_app/screens/auth/sign_in_welcome_screen.dart';
@@ -168,6 +169,23 @@ class AccountScreen extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (_) => const SavedRestaurantScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    const Divider(color: _border, height: 1),
+
+                    _AccountRow(
+                      icon: Icons.menu_book_rounded,
+                      title: 'My Records',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const FoodRecordListScreen(
+                              mine: true,
+                              title: 'My Records',
+                            ),
                           ),
                         );
                       },

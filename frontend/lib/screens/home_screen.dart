@@ -1,6 +1,10 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:yumbook_app/models/food_record.dart';
 import 'package:yumbook_app/models/restaurant.dart';
+import 'package:yumbook_app/screens/food_records/food_record_detail_screen.dart';
+import 'package:yumbook_app/screens/food_records/food_record_list_screen.dart';
+import 'package:yumbook_app/state/food_record_store.dart';
 import 'detail_screen.dart';
 
 class Category {
@@ -24,6 +28,46 @@ class _AHomeCategoryState extends State<AHomeCategory> {
   int activeCategory = 2;
 
   final ScrollController _tabScrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadPublicRecords();
+    });
+  }
+
+  Future<void> _loadPublicRecords() async {
+    try {
+      await FoodRecordStore.instance.loadPublicFeed();
+    } catch (_) {
+      // 홈에서는 실패해도 조용히 숨김 — 카드들로 본 흐름은 유지
+    }
+  }
+
+  void _openAllPublicRecords() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const FoodRecordListScreen(
+          mine: false,
+          title: 'Recent Records',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openRecordDetail(FoodRecord record) async {
+    final deleted = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FoodRecordDetailScreen(initialRecord: record),
+      ),
+    );
+    if (deleted == true) {
+      _loadPublicRecords();
+    }
+  }
 
   final List<Category> categories = const [
     Category(1, "CURATOR PICK"),
@@ -110,7 +154,8 @@ class _AHomeCategoryState extends State<AHomeCategory> {
                   },
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 12)),
+              SliverToBoxAdapter(child: _buildRecentRecordsSection()),
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
             ],
           ),
         ),
@@ -202,6 +247,79 @@ class _AHomeCategoryState extends State<AHomeCategory> {
     );
   }
 
+  Widget _buildRecentRecordsSection() {
+    return AnimatedBuilder(
+      animation: FoodRecordStore.instance,
+      builder: (context, _) {
+        final store = FoodRecordStore.instance;
+        final records = store.publicRecords;
+        final isLoading = store.isLoadingPublic;
+
+        if (records.isEmpty && !isLoading) {
+          // 아직 데이터 없으면 섹션 자체를 숨김
+          return const SizedBox.shrink();
+        }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Recent Records',
+                        style: TextStyle(
+                          color: _textDark,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Pretendard',
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _openAllPublicRecords,
+                      child: const Text(
+                        'See all',
+                        style: TextStyle(
+                          color: _textMuted,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          fontFamily: 'Pretendard',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                height: 220,
+                child: isLoading && records.isEmpty
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        itemCount: records.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
+                        itemBuilder: (context, index) {
+                          final record = records[index];
+                          return _RecentRecordTile(
+                            record: record,
+                            onTap: () => _openRecordDetail(record),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildArticleCard({
     required BuildContext context,
     required Restaurant restaurant,
@@ -276,6 +394,120 @@ class _AHomeCategoryState extends State<AHomeCategory> {
                       fontFamily: 'Pretendard',
                       height: 1.3,
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentRecordTile extends StatelessWidget {
+  final FoodRecord record;
+  final VoidCallback onTap;
+
+  const _RecentRecordTile({required this.record, required this.onTap});
+
+  static const Color _textDark = Color(0xFF303030);
+  static const Color _textMuted = Color(0xFF7A7A7A);
+  static const Color _border = Color(0xFFE5E5EA);
+  static const Color _primary = Color(0xFFD45425);
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl =
+        record.images.isNotEmpty ? record.images.first.imageUrl : null;
+    final titleParts = [
+      if (record.restaurantName.isNotEmpty) record.restaurantName,
+      if (record.menuName.isNotEmpty) record.menuName,
+    ];
+    final title = titleParts.isEmpty ? 'Untitled' : titleParts.join(' · ');
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 200,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: _border),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 10,
+              child: imageUrl != null && imageUrl.isNotEmpty
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        color: const Color(0xFFEAEAEA),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.broken_image_outlined,
+                          color: _textMuted,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      color: const Color(0xFFEAEAEA),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.restaurant,
+                        color: _textMuted,
+                      ),
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textDark,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Pretendard',
+                    ),
+                  ),
+                  if (record.review.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      record.review,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _textMuted,
+                        fontSize: 12,
+                        fontFamily: 'Pretendard',
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.star, color: _primary, size: 13),
+                      const SizedBox(width: 3),
+                      Text(
+                        record.rating.toStringAsFixed(1),
+                        style: const TextStyle(
+                          color: _primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Pretendard',
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

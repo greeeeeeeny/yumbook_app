@@ -35,4 +35,30 @@ class Restaurant {
     this.rating = 0,
     this.reviewCount = 0,
   });
+
+  factory Restaurant.fromJson(Map<String, dynamic> json) {
+    final tagsValue = json['tags'];
+    return Restaurant(
+      id: json['id'].toString(),
+      name: json['name'] as String? ?? '',
+      location: json['location'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      imagePath: json['image_url'] as String? ?? '',
+      tags: tagsValue is List
+          ? tagsValue.map((e) => e.toString()).toList()
+          : const [],
+      rawCategory: json['raw_category'] as String?,
+      lat: _toDouble(json['lat']),
+      lng: _toDouble(json['lng']),
+      rating: _toDouble(json['rating']) ?? 0,
+      reviewCount: (json['review_count'] as int?) ?? 0,
+    );
+  }
+
+  static double? _toDouble(Object? value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
 }
