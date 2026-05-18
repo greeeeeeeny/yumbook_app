@@ -15,11 +15,20 @@ class AuthenticationServiceUnavailable(exceptions.APIException):
 class SupabaseUser:
     id: str
     email: str | None = None
+    is_staff: bool = False
     raw: object | None = None
 
     @property
     def is_authenticated(self):
         return True
+
+    @property
+    def is_active(self):
+        return True
+
+    @property
+    def is_superuser(self):
+        return self.is_staff
 
     @property
     def pk(self):
@@ -57,6 +66,7 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
         user = SupabaseUser(
             id=str(user_id),
             email=self._get_value(supabase_user, "email"),
+            is_staff=self._is_admin(supabase_user),
             raw=supabase_user,
         )
         return user, token
@@ -84,3 +94,13 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
         if isinstance(source, dict):
             return source.get(key)
         return getattr(source, key, None)
+
+    @classmethod
+    def _is_admin(cls, supabase_user):
+        app_metadata = cls._get_value(supabase_user, "app_metadata") or {}
+        role = (
+            app_metadata.get("role")
+            if isinstance(app_metadata, dict)
+            else cls._get_value(app_metadata, "role")
+        )
+        return role == "admin"

@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import (
     api_view,
@@ -9,7 +10,12 @@ from rest_framework.response import Response
 
 from .authentication import SupabaseAuthentication
 from .models import Reservation
-from .serializers import ReservationSerializer
+from .serializers import (
+    AuthCredentialsSerializer,
+    LoginResponseSerializer,
+    ReservationSerializer,
+    SignupResponseSerializer,
+)
 
 
 class ReservationViewSet(viewsets.ModelViewSet):
@@ -38,6 +44,10 @@ def _get_supabase_client():
     return get_supabase_client()
 
 
+@extend_schema(
+    request=AuthCredentialsSerializer,
+    responses={200: SignupResponseSerializer, 400: SignupResponseSerializer},
+)
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -62,6 +72,10 @@ def signup(request):
     return Response({"error": "가입 실패"}, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    request=AuthCredentialsSerializer,
+    responses={200: LoginResponseSerializer, 401: SignupResponseSerializer},
+)
 @api_view(["POST"])
 @authentication_classes([])
 @permission_classes([AllowAny])

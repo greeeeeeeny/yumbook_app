@@ -5,7 +5,14 @@ from django.db import models
 
 class Reservation(models.Model):
     user = models.CharField(max_length=255)
-    restaurant_id = models.CharField(max_length=100, blank=True, null=True)
+    restaurant = models.ForeignKey(
+        "restaurants.Restaurant",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reservations",
+    )
+    external_restaurant_id = models.CharField(max_length=100, blank=True, null=True)
     restaurant_name = models.CharField(max_length=255, blank=True)
     date = models.DateField()
     time = models.TimeField()

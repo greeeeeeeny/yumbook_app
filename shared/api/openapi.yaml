@@ -1,0 +1,656 @@
+openapi: 3.0.3
+info:
+  title: YumBook API
+  version: 0.1.0
+  description: YumBook 백엔드 REST API (Django + DRF + Supabase Auth)
+paths:
+  /api/login/:
+    post:
+      operationId: login_create
+      tags:
+      - login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthCredentials'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AuthCredentials'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AuthCredentials'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignupResponse'
+          description: ''
+  /api/reservations/:
+    get:
+      operationId: reservations_list
+      tags:
+      - reservations
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reservation'
+          description: ''
+    post:
+      operationId: reservations_create
+      tags:
+      - reservations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reservation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Reservation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Reservation'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+  /api/reservations/{id}/:
+    get:
+      operationId: reservations_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this reservation.
+        required: true
+      tags:
+      - reservations
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+    put:
+      operationId: reservations_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this reservation.
+        required: true
+      tags:
+      - reservations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reservation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Reservation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Reservation'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+    patch:
+      operationId: reservations_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this reservation.
+        required: true
+      tags:
+      - reservations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReservation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReservation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReservation'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+    delete:
+      operationId: reservations_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this reservation.
+        required: true
+      tags:
+      - reservations
+      security:
+      - SupabaseBearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/restaurants/:
+    get:
+      operationId: restaurants_list
+      tags:
+      - restaurants
+      security:
+      - SupabaseBearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Restaurant'
+          description: ''
+    post:
+      operationId: restaurants_create
+      tags:
+      - restaurants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Restaurant'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Restaurant'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Restaurant'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restaurant'
+          description: ''
+  /api/restaurants/{id}/:
+    get:
+      operationId: restaurants_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this restaurant.
+        required: true
+      tags:
+      - restaurants
+      security:
+      - SupabaseBearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restaurant'
+          description: ''
+    put:
+      operationId: restaurants_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this restaurant.
+        required: true
+      tags:
+      - restaurants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Restaurant'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Restaurant'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Restaurant'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restaurant'
+          description: ''
+    patch:
+      operationId: restaurants_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this restaurant.
+        required: true
+      tags:
+      - restaurants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRestaurant'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRestaurant'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRestaurant'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restaurant'
+          description: ''
+    delete:
+      operationId: restaurants_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this restaurant.
+        required: true
+      tags:
+      - restaurants
+      security:
+      - SupabaseBearer: []
+      responses:
+        '204':
+          description: No response body
+  /api/signup/:
+    post:
+      operationId: signup_create
+      tags:
+      - signup
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthCredentials'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AuthCredentials'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AuthCredentials'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignupResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignupResponse'
+          description: ''
+components:
+  schemas:
+    AuthCredentials:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+          minLength: 6
+      required:
+      - email
+      - password
+    DepositTypeEnum:
+      enum:
+      - none
+      - perGuest
+      - fixed
+      type: string
+      description: |-
+        * `none` - None
+        * `perGuest` - Per guest
+        * `fixed` - Fixed
+    LoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        access_token:
+          type: string
+      required:
+      - access_token
+      - message
+    PatchedReservation:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: string
+          readOnly: true
+        user_id:
+          type: string
+          readOnly: true
+        restaurant:
+          type: integer
+          nullable: true
+        external_restaurant_id:
+          type: string
+          nullable: true
+          maxLength: 100
+        restaurant_name:
+          type: string
+          maxLength: 255
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+          format: time
+        party_size:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        guest_name:
+          type: string
+          maxLength: 100
+        seat_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        confirmation_code:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedRestaurant:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        location:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        image_url:
+          type: string
+          format: uri
+          maxLength: 500
+        tags: {}
+        raw_category:
+          type: string
+          maxLength: 100
+        lat:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        lng:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        rating:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,1}(?:\.\d{0,2})?$
+        review_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        policy:
+          allOf:
+          - $ref: '#/components/schemas/RestaurantPolicy'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    Reservation:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: string
+          readOnly: true
+        user_id:
+          type: string
+          readOnly: true
+        restaurant:
+          type: integer
+          nullable: true
+        external_restaurant_id:
+          type: string
+          nullable: true
+          maxLength: 100
+        restaurant_name:
+          type: string
+          maxLength: 255
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+          format: time
+        party_size:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        guest_name:
+          type: string
+          maxLength: 100
+        seat_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        confirmation_code:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - confirmation_code
+      - created_at
+      - date
+      - id
+      - time
+      - updated_at
+      - user
+      - user_id
+    Restaurant:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        location:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        image_url:
+          type: string
+          format: uri
+          maxLength: 500
+        tags: {}
+        raw_category:
+          type: string
+          maxLength: 100
+        lat:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        lng:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        rating:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,1}(?:\.\d{0,2})?$
+        review_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        policy:
+          allOf:
+          - $ref: '#/components/schemas/RestaurantPolicy'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - policy
+      - updated_at
+    RestaurantPolicy:
+      type: object
+      properties:
+        deposit_type:
+          $ref: '#/components/schemas/DepositTypeEnum'
+        deposit_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        free_cancel_days:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        refund_within_window_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,1}(?:\.\d{0,2})?$
+        refund_outside_window_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,1}(?:\.\d{0,2})?$
+        no_show_refund_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,1}(?:\.\d{0,2})?$
+        restaurant_cancel_refund_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,1}(?:\.\d{0,2})?$
+    SignupResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+  securitySchemes:
+    SupabaseBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase access token. Obtain via Supabase Auth (frontend) or POST
+        /api/login/.
