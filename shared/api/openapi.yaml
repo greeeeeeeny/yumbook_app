@@ -4,6 +4,149 @@ info:
   version: 0.1.0
   description: YumBook 백엔드 REST API (Django + DRF + Supabase Auth)
 paths:
+  /api/food-records/:
+    get:
+      operationId: food_records_list
+      tags:
+      - food-records
+      security:
+      - SupabaseBearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FoodRecord'
+          description: ''
+    post:
+      operationId: food_records_create
+      tags:
+      - food-records
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FoodRecord'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FoodRecord'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FoodRecord'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodRecord'
+          description: ''
+  /api/food-records/{id}/:
+    get:
+      operationId: food_records_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this food record.
+        required: true
+      tags:
+      - food-records
+      security:
+      - SupabaseBearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodRecord'
+          description: ''
+    put:
+      operationId: food_records_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this food record.
+        required: true
+      tags:
+      - food-records
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FoodRecord'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FoodRecord'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FoodRecord'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodRecord'
+          description: ''
+    patch:
+      operationId: food_records_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this food record.
+        required: true
+      tags:
+      - food-records
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFoodRecord'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFoodRecord'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFoodRecord'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FoodRecord'
+          description: ''
+    delete:
+      operationId: food_records_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this food record.
+        required: true
+      tags:
+      - food-records
+      security:
+      - SupabaseBearer: []
+      responses:
+        '204':
+          description: No response body
   /api/login/:
     post:
       operationId: login_create
@@ -377,6 +520,82 @@ components:
         * `none` - None
         * `perGuest` - Per guest
         * `fixed` - Fixed
+    FoodRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: string
+          readOnly: true
+        user_id:
+          type: string
+          readOnly: true
+        restaurant:
+          type: integer
+          nullable: true
+        restaurant_name:
+          type: string
+          maxLength: 255
+        menu_name:
+          type: string
+          maxLength: 255
+        rating:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,1})?$
+        review:
+          type: string
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        tags: {}
+        visited_at:
+          type: string
+          format: date
+          nullable: true
+        is_public:
+          type: boolean
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/FoodRecordImage'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - rating
+      - updated_at
+      - user
+      - user_id
+    FoodRecordImage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        image_url:
+          type: string
+          format: uri
+          maxLength: 500
+        order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - id
+      - image_url
     LoginResponse:
       type: object
       properties:
@@ -387,6 +606,57 @@ components:
       required:
       - access_token
       - message
+    PatchedFoodRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: string
+          readOnly: true
+        user_id:
+          type: string
+          readOnly: true
+        restaurant:
+          type: integer
+          nullable: true
+        restaurant_name:
+          type: string
+          maxLength: 255
+        menu_name:
+          type: string
+          maxLength: 255
+        rating:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,1})?$
+        review:
+          type: string
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        tags: {}
+        visited_at:
+          type: string
+          format: date
+          nullable: true
+        is_public:
+          type: boolean
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/FoodRecordImage'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedReservation:
       type: object
       properties:

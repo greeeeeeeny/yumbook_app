@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "reservations",
     "restaurants",
+    "food_records",
 ]
 
 REST_FRAMEWORK = {
