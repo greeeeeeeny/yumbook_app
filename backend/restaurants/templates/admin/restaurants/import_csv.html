@@ -1,0 +1,29 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:restaurants_restaurant_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% trans 'Import CSV' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <p>
+    {% trans "헤더: name,region,category,image_url,address,description,rating (선택: is_primary, storage_path)" %}
+  </p>
+  <form action="" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      {{ form.as_p }}
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" class="default" value="{% trans 'Import' %}">
+      <a href="{% url 'admin:restaurants_restaurant_changelist' %}" class="button cancel-link">{% trans 'Cancel' %}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:yumbook_app/models/dining_preferences.dart';
+import 'package:yumbook_app/state/dining_preferences_store.dart';
 
 class DiningPreferencesFlowScreen extends StatefulWidget {
   final int initialStep;
@@ -27,6 +28,7 @@ class _DiningPreferencesFlowScreenState
   late int _step;
   late DiningPreferences _data;
   late TextEditingController _notesController;
+  bool _isSaving = false;
 
   final List<String> _cuisineOptions = const [
     'Korean',
@@ -93,7 +95,7 @@ class _DiningPreferencesFlowScreenState
     setter(updated);
   }
 
-  void _next() {
+  Future<void> _next() async {
     if (_step < 3) {
       setState(() {
         _step++;
@@ -101,11 +103,25 @@ class _DiningPreferencesFlowScreenState
       return;
     }
 
+    if (_isSaving) return;
+
     final result = _data.copyWith(
       additionalNotes: _notesController.text.trim(),
     );
 
-    Navigator.pop(context, result);
+    setState(() => _isSaving = true);
+    try {
+      await DiningPreferencesStore.instance.save(result);
+      if (!mounted) return;
+      Navigator.pop(context, result);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save preferences: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   void _back() {
@@ -205,16 +221,27 @@ class _DiningPreferencesFlowScreenState
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: _next,
+                  onPressed: _isSaving ? null : _next,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _orange,
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: _orange.withValues(alpha: 0.4),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: Text(_step == 3 ? 'Save' : 'Next'),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Text(_step == 3 ? 'Save' : 'Next'),
                 ),
               ),
             ),

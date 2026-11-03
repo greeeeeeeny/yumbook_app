@@ -29,10 +29,13 @@ class _PaymentMethodsWidgetState extends State<PaymentMethodsWidget> {
 
   String? _selectedMethodId;
   bool _showAddCardForm = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    // 백엔드에서 저장된 결제수단을 로드한다. 목록이 비어 있으면 build에서 추가 폼을 노출.
+    PaymentMethodStore.instance.ensureLoaded();
     final methods = PaymentMethodStore.instance.methods;
     if (methods.isNotEmpty) {
       _selectedMethodId = methods.first.id;
@@ -76,7 +79,8 @@ class _PaymentMethodsWidgetState extends State<PaymentMethodsWidget> {
     widget.onMethodSelected?.call(selected.first);
   }
 
-  void _onSave() {
+  Future<void> _onSave() async {
+    if (_isSaving) return;
     if (_formKey.currentState?.validate() != true) return;
 
     if (_country == null) {
@@ -97,33 +101,43 @@ class _PaymentMethodsWidgetState extends State<PaymentMethodsWidget> {
     final last4 =
         digits.length >= 4 ? digits.substring(digits.length - 4) : '0000';
 
+    // 보안: 전체 카드번호/CVC는 서버로 보내지 않는다. last4/brand만 추출해 저장한다.
     final newMethod = PaymentMethodModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: '',
       brand: _detectCardBrand(digits),
       last4: last4,
       holderName: _nameCtrl.text.trim(),
       expiry: _expiryCtrl.text.trim(),
     );
 
-    PaymentMethodStore.instance.addMethod(newMethod);
+    setState(() => _isSaving = true);
+    try {
+      final saved = await PaymentMethodStore.instance.addMethod(newMethod);
 
-    _cardNumberCtrl.clear();
-    _expiryCtrl.clear();
-    _cvcCtrl.clear();
-    _nameCtrl.clear();
-    _regionCtrl.clear();
+      _cardNumberCtrl.clear();
+      _expiryCtrl.clear();
+      _cvcCtrl.clear();
+      _nameCtrl.clear();
+      _regionCtrl.clear();
 
-    setState(() {
-      _country = null;
-      _selectedMethodId = newMethod.id;
-      _showAddCardForm = false;
-    });
+      if (!mounted) return;
+      setState(() {
+        _country = null;
+        _selectedMethodId = saved.id;
+        _showAddCardForm = false;
+      });
 
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Card saved successfully.')),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Card saved successfully.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save card: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   String _detectCardBrand(String digits) {
@@ -225,9 +239,12 @@ class _PaymentMethodsWidgetState extends State<PaymentMethodsWidget> {
                                 _selectedMethodId = method.id;
                               });
                             },
-                            onDelete: () {
-                              PaymentMethodStore.instance.removeMethod(method.id);
+                            onDelete: () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              await PaymentMethodStore.instance
+                                  .removeMethod(method.id);
 
+                              if (!mounted) return;
                               final updated = PaymentMethodStore.instance.methods;
                               setState(() {
                                 if (_selectedMethodId == method.id) {
@@ -238,6 +255,13 @@ class _PaymentMethodsWidgetState extends State<PaymentMethodsWidget> {
                                   _showAddCardForm = true;
                                 }
                               });
+                              if (PaymentMethodStore.instance.hasError) {
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Failed to remove card.'),
+                                  ),
+                                );
+                              }
                             },
                           ),
                         );
@@ -364,15 +388,26 @@ class _PaymentMethodsWidgetState extends State<PaymentMethodsWidget> {
                             ),
                             elevation: 0,
                           ),
-                          onPressed: _onSave,
-                          child: const Text(
-                            'Save card',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          onPressed: _isSaving ? null : _onSave,
+                          child: _isSaving
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Text(
+                                  'Save card',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                         ),
                       ),
                     ],

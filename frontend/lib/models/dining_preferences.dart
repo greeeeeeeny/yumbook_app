@@ -24,4 +24,31 @@ class DiningPreferences {
       additionalNotes: additionalNotes ?? this.additionalNotes,
     );
   }
+
+  /// 백엔드(`/api/account/dining-preferences/`) 응답 → 모델.
+  factory DiningPreferences.fromJson(Map<String, dynamic> json) {
+    return DiningPreferences(
+      favoriteCuisines: _toStringList(json['favorite_cuisines']),
+      diningStyles: _toStringList(json['dining_styles']),
+      dietaryRestrictions: _toStringList(json['dietary_restrictions']),
+      additionalNotes: json['additional_notes'] as String? ?? '',
+    );
+  }
+
+  /// PATCH 본문(snake_case).
+  Map<String, dynamic> toJson() {
+    return {
+      'favorite_cuisines': favoriteCuisines,
+      'dining_styles': diningStyles,
+      'dietary_restrictions': dietaryRestrictions,
+      'additional_notes': additionalNotes,
+    };
+  }
+
+  static List<String> _toStringList(Object? value) {
+    if (value is List) {
+      return value.map((e) => e.toString()).toList();
+    }
+    return const [];
+  }
 }

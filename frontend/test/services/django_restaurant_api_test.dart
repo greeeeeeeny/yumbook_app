@@ -34,6 +34,7 @@ void main() {
       query: '파스타',
       location: '강남',
       category: '양식',
+      region: 'hongdae',
     );
 
     final captured = verify(
@@ -45,6 +46,21 @@ void main() {
     expect(uri.queryParameters['q'], '파스타');
     expect(uri.queryParameters['location'], '강남');
     expect(uri.queryParameters['category'], '양식');
+    expect(uri.queryParameters['region'], 'hongdae');
+  });
+
+  test('region 파라미터만 단독으로 전달된다', () async {
+    when(() => client.get(any(), headers: any(named: 'headers')))
+        .thenAnswer((_) async => http.Response('[]', 200));
+
+    await api.searchRestaurants(region: 'insadong');
+
+    final captured = verify(
+      () => client.get(captureAny(), headers: any(named: 'headers')),
+    ).captured;
+    final uri = captured.single as Uri;
+
+    expect(uri.queryParameters, {'region': 'insadong'});
   });
 
   test('빈 파라미터는 query string에 포함되지 않는다', () async {

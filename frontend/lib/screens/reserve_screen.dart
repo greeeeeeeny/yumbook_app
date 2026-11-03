@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'package:yumbook_app/themes/app_spacing.dart';
-import 'package:yumbook_app/data/mock_restaurants.dart';
 import 'package:yumbook_app/models/restaurant.dart';
 import 'package:yumbook_app/models/reservation_data.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:yumbook_app/state/reservation_store.dart';
+import 'package:yumbook_app/state/restaurant_cache.dart';
 
 import 'package:yumbook_app/screens/root_shell.dart';
 import 'package:yumbook_app/screens/reservation_details_screen.dart';
@@ -61,7 +61,6 @@ class _ReserveScreenState extends State<ReserveScreen> {
             final upcoming = store.upcoming(now);
             final past = store.past(now);
             final notify = store.notifyRequests;
-            debugPrint('notify count = ${notify.length}');
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -132,9 +131,7 @@ class _ReserveScreenState extends State<ReserveScreen> {
                             }
                             return _ReservationList(
                               items: past,
-                              onTapCard: (r) {
-                                // ✅ 다음 단계에서 Past 상세로도 연결 가능
-                              },
+                              onTapCard: (_) {},
                             );
 
                           case _ReserveTab.notify:
@@ -315,35 +312,21 @@ class _ReservationList extends StatelessWidget {
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, i) {
         final r = items[i];
-        final restaurant = _findRestaurant(r.restaurantId);
         return _ReservationCard(
           reservation: r,
-          restaurant: restaurant,
           onTap: () => onTapCard(r),
         );
       },
     );
   }
-
-  // ✅ 해결방법 A: 여기! String? 받도록 수정
-  Restaurant? _findRestaurant(String? id) {
-    if (id == null || id.trim().isEmpty) return null;
-    try {
-      return mockRestaurants.firstWhere((e) => e.id == id);
-    } catch (_) {
-      return null;
-    }
-  }
 }
 
 class _ReservationCard extends StatelessWidget {
   final ReservationData reservation;
-  final Restaurant? restaurant;
   final VoidCallback onTap;
 
   const _ReservationCard({
     required this.reservation,
-    required this.restaurant,
     required this.onTap,
   });
 
@@ -355,53 +338,61 @@ class _ReservationCard extends StatelessWidget {
     return '$d at $t';
   }
 
-  String _locationText() {
-    final loc = restaurant?.location;
-    if (loc == null || loc.trim().isEmpty) return '—';
-    // 예: "Gangnam, Seoul"처럼 보이도록 loc 값을 이미 그렇게 저장하면 그대로 표시됨
-    return loc;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final imagePath = restaurant?.imagePath;
+    // 식당 정보(위치/이미지)는 백엔드에서 조회한다(mock 제거).
+    return FutureBuilder<Restaurant?>(
+      future: RestaurantCache.instance.getById(reservation.restaurantId),
+      builder: (context, snapshot) {
+        final restaurant = snapshot.data;
+        final location = (restaurant?.location.trim().isNotEmpty ?? false)
+            ? restaurant!.location
+            : '—';
+        final imageUrl = restaurant?.imagePath ?? '';
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          border: Border.all(color: _border, width: 1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _CardTextBlock(
-                title: reservation.restaurantName,
-                line1:
-                    '${reservation.partySize} guests for ${reservation.guestName}',
-                line2: _dateTimeText(),
-                line3: _locationText(),
-              ),
-            ),
-            const SizedBox(width: 10),
-            ClipRRect(
+        return GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border.all(color: _border, width: 1),
               borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: 89,
-                height: 96,
-                color: const Color(0xFFD5EAF7),
-                child: (imagePath != null && imagePath.isNotEmpty)
-                    ? Image.asset(imagePath, fit: BoxFit.cover)
-                    : const SizedBox.shrink(),
-              ),
             ),
-          ],
-        ),
-      ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _CardTextBlock(
+                    title: reservation.restaurantName,
+                    line1:
+                        '${reservation.partySize} guests for ${reservation.guestName}',
+                    line2: _dateTimeText(),
+                    line3: location,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 89,
+                    height: 96,
+                    color: const Color(0xFFD5EAF7),
+                    child: imageUrl.isNotEmpty
+                        ? Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const SizedBox.shrink(),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

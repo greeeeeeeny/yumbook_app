@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import 'package:yumbook_app/data/mock_restaurants.dart';
 import 'package:yumbook_app/models/restaurant.dart';
 import 'package:yumbook_app/models/reservation_data.dart';
 import 'package:yumbook_app/state/reservation_store.dart';
+import 'package:yumbook_app/state/restaurant_cache.dart';
 
 import 'package:yumbook_app/screens/reservation_edit_screen.dart';
 import 'package:yumbook_app/screens/reservation_cancel_sheet.dart';
@@ -77,22 +77,10 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
     }
   }
 
-  Restaurant? _findRestaurant(String? id) {
-    if (id == null || id.trim().isEmpty) return null;
-    try {
-      return mockRestaurants.firstWhere((e) => e.id == id);
-    } catch (_) {
-      return null;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final store = ReservationStore.instance;
     final reservation = _currentReservation(store) ?? widget.reservation;
-
-    final restaurant = _findRestaurant(reservation.restaurantId);
-    final imagePath = restaurant?.imagePath;
 
     final dateText = DateFormat('MMM d, yyyy').format(reservation.date);
     final timeText = DateFormat('h:mm a').format(reservation.time);
@@ -209,13 +197,9 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
                     const SizedBox(width: 10),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        width: 78,
-                        height: 78,
-                        color: const Color(0xFFD5EAF7),
-                        child: (imagePath != null && imagePath.isNotEmpty)
-                            ? Image.asset(imagePath, fit: BoxFit.cover)
-                            : const SizedBox.shrink(),
+                      child: _ReservationThumbnail(
+                        restaurantId: reservation.restaurantId,
+                        size: 78,
                       ),
                     ),
                   ],
@@ -337,12 +321,20 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
                             noShowRefundRate: 0.0,
                           ),
                           onConfirmCancel: (reason) async {
-                            ReservationStore.instance.cancelReservation(
-                              reservation,
-                            );
-
-                            if (context.mounted) {
+                            final messenger = ScaffoldMessenger.of(context);
+                            try {
+                              await ReservationStore.instance.cancelReservation(
+                                reservation,
+                                reason: reason,
+                              );
+                              if (!context.mounted) return;
                               Navigator.pop(context);
+                            } catch (error) {
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to cancel: $error'),
+                                ),
+                              );
                             }
                           },
                         );
@@ -412,6 +404,36 @@ class _ReservationDetailsScreenState extends State<ReservationDetailsScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 예약 식당 썸네일. 백엔드에서 식당 이미지를 조회해 표시(없으면 플레이스홀더).
+class _ReservationThumbnail extends StatelessWidget {
+  final String? restaurantId;
+  final double size;
+
+  const _ReservationThumbnail({required this.restaurantId, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Restaurant?>(
+      future: RestaurantCache.instance.getById(restaurantId),
+      builder: (context, snapshot) {
+        final url = snapshot.data?.imagePath ?? '';
+        return Container(
+          width: size,
+          height: size,
+          color: const Color(0xFFD5EAF7),
+          child: url.isNotEmpty
+              ? Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                )
+              : const SizedBox.shrink(),
+        );
+      },
     );
   }
 }

@@ -125,6 +125,7 @@ class AccountScreen extends StatelessWidget {
     return AnimatedBuilder(
       animation: UserProfileStore.instance,
       builder: (context, _) {
+        UserProfileStore.instance.ensureLoaded();
         final profile = UserProfileStore.instance.profile;
 
         return Scaffold(

@@ -217,20 +217,17 @@ class _ReservationEditScreenState extends State<ReservationEditScreen> {
 
     setState(() => _saving = true);
 
+    final newDateTime = DateTime(
+      _date.year,
+      _date.month,
+      _date.day,
+      _time.hour,
+      _time.minute,
+    );
+
     try {
-      final store = ReservationStore.instance;
-
-      final newDateTime = DateTime(
-        _date.year,
-        _date.month,
-        _date.day,
-        _time.hour,
-        _time.minute,
-      );
-
-      // 현재는 기존 updateReservation 호출
-      // 다음 단계에서 requestReservationChange(...) 구조로 바꾸는 것을 추천
-      store.requestReservationChange(
+      // 백엔드에 변경 요청 생성(POST /api/reservations/{id}/request-change/).
+      await ReservationStore.instance.requestReservationChange(
         widget.reservation,
         newDate: _date,
         newTime: newDateTime,
@@ -239,6 +236,11 @@ class _ReservationEditScreenState extends State<ReservationEditScreen> {
 
       if (!mounted) return;
       Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to request change: $error')),
+      );
     } finally {
       if (mounted) {
         setState(() => _saving = false);

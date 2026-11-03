@@ -34,7 +34,7 @@ DEBUG = True
 ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
-    "10.0.2.2",
+    "192.168.200.178",
     ".app.github.dev",
     "testserver",
 ]
@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "reservations",
     "restaurants",
     "food_records",
+    "accounts",
 ]
 
 REST_FRAMEWORK = {

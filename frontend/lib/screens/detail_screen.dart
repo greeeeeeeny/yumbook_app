@@ -176,6 +176,7 @@ Widget _circleAssetButton({
             AnimatedBuilder(
               animation: SavedRestaurantsStore.instance,
               builder: (context, _) {
+                SavedRestaurantsStore.instance.ensureLoaded();
                 final user = Supabase.instance.client.auth.currentUser;
 
                 final isSaved = user != null &&

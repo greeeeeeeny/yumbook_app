@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:yumbook_app/models/transaction_model.dart';
 import 'package:yumbook_app/state/transaction_store.dart';
 
+const Color _kTxTextGray = Color(0xFF6E6E6E);
+
 enum TransactionFilter {
   all,
   reservation,
@@ -23,6 +25,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   TransactionFilter _filter = TransactionFilter.all;
 
+  @override
+  void initState() {
+    super.initState();
+    TransactionStore.instance.ensureLoaded();
+  }
+
   List<TransactionModel> _applyFilter(List<TransactionModel> items) {
     switch (_filter) {
       case TransactionFilter.all:
@@ -36,12 +44,53 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     }
   }
 
+  Widget _buildBody(
+    TransactionStore store,
+    List<TransactionModel> filteredItems,
+  ) {
+    if (store.isLoading && store.items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (store.hasError && store.items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Couldn't load transactions.",
+              style: TextStyle(color: _kTxTextGray, fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => store.load(),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (filteredItems.isEmpty) {
+      return const _EmptyTransactions();
+    }
+
+    return ListView.separated(
+      itemCount: filteredItems.length,
+      separatorBuilder: (_, __) => const Divider(height: 1, color: _border),
+      itemBuilder: (context, index) {
+        return _TransactionRow(item: filteredItems[index]);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: TransactionStore.instance,
       builder: (context, _) {
-        final items = TransactionStore.instance.items;
+        final store = TransactionStore.instance;
+        final items = store.items;
         final filteredItems = _applyFilter(items);
 
         return Scaffold(
@@ -93,16 +142,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   ),
                   const SizedBox(height: 18),
                   Expanded(
-                    child: filteredItems.isEmpty
-                        ? const _EmptyTransactions()
-                        : ListView.separated(
-                            itemCount: filteredItems.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(height: 1, color: _border),
-                            itemBuilder: (context, index) {
-                              return _TransactionRow(item: filteredItems[index]);
-                            },
-                          ),
+                    child: _buildBody(store, filteredItems),
                   ),
                 ],
               ),

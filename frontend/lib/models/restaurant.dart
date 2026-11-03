@@ -18,6 +18,12 @@ class Restaurant {
   final double? lat;
   final double? lng;
 
+  // ✅ 지역 필터용 (홈 화면 지역 탭) — 예: 'insadong', 'hongdae'
+  final String? region;
+
+  // ✅ Explore 가격 필터용 가격 티어 (1~4 == ₩~₩₩₩₩)
+  final int? priceLevel;
+
   const Restaurant({
     required this.id,
     required this.name,
@@ -30,6 +36,12 @@ class Restaurant {
     this.rawCategory,
     this.lat,
     this.lng,
+
+    // ✅ 지역 필터용
+    this.region,
+
+    // ✅ 가격 티어
+    this.priceLevel,
 
     // 기존 선택값
     this.rating = 0,
@@ -48,8 +60,10 @@ class Restaurant {
           ? tagsValue.map((e) => e.toString()).toList()
           : const [],
       rawCategory: json['raw_category'] as String?,
+      region: json['region'] as String?,
       lat: _toDouble(json['lat']),
       lng: _toDouble(json['lng']),
+      priceLevel: _toInt(json['price_level']),
       rating: _toDouble(json['rating']) ?? 0,
       reviewCount: (json['review_count'] as int?) ?? 0,
     );
@@ -59,6 +73,14 @@ class Restaurant {
     if (value == null) return null;
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static int? _toInt(Object? value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
     return null;
   }
 }

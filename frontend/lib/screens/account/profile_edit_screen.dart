@@ -21,6 +21,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   late final TextEditingController _emailController;
 
   String? _selectedImagePath;
+  bool _isSaving = false;
 
   final List<String> _avatarOptions = const [
     'assets/images/profile/avatar_1.png',
@@ -50,22 +51,33 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     super.dispose();
   }
 
-  void _saveProfile() {
+  Future<void> _saveProfile() async {
+    if (_isSaving) return;
     final store = UserProfileStore.instance;
     final current = store.profile;
 
-    store.updateProfile(
-      current.copyWith(
-        name: _nameController.text.trim(),
-        dateOfBirth: _dobController.text.trim(),
-        mobileNumber: _mobileController.text.trim(),
-        email: _emailController.text.trim(),
-        profileImagePath: _selectedImagePath,
-        clearProfileImage: _selectedImagePath == null,
-      ),
-    );
-
-    Navigator.pop(context);
+    setState(() => _isSaving = true);
+    try {
+      await store.updateProfile(
+        current.copyWith(
+          name: _nameController.text.trim(),
+          dateOfBirth: _dobController.text.trim(),
+          mobileNumber: _mobileController.text.trim(),
+          email: _emailController.text.trim(),
+          profileImagePath: _selectedImagePath,
+          clearProfileImage: _selectedImagePath == null,
+        ),
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save profile: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   void _showAvatarPicker() {
@@ -324,22 +336,33 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _saveProfile,
+                  onPressed: _isSaving ? null : _saveProfile,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _orange,
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: _orange.withValues(alpha: 0.4),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text(
-                    'Save',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Save',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
             ),

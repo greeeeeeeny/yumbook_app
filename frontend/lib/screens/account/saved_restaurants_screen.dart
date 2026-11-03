@@ -28,8 +28,9 @@ class SavedRestaurantScreen extends StatelessWidget {
         }
 
         final userId = currentUser.id;
-        final savedRestaurants =
-            SavedRestaurantsStore.instance.getSavedRestaurants(userId);
+        final store = SavedRestaurantsStore.instance;
+        store.ensureLoaded();
+        final savedRestaurants = store.getSavedRestaurants(userId);
 
         return Scaffold(
           backgroundColor: _bg,
@@ -76,25 +77,57 @@ class SavedRestaurantScreen extends StatelessWidget {
                   const SizedBox(height: 20),
 
                   Expanded(
-                    child: savedRestaurants.isEmpty
-                        ? const _EmptySavedRestaurants()
-                        : ListView.separated(
-                            itemCount: savedRestaurants.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 15),
-                            itemBuilder: (context, index) {
-                              final restaurant = savedRestaurants[index];
-                              return _SavedRestaurantCard(
-                                restaurant: restaurant,
-                                userId: userId,
-                              );
-                            },
-                          ),
+                    child: _buildBody(store, savedRestaurants, userId),
                   ),
                 ],
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(
+    SavedRestaurantsStore store,
+    List<Restaurant> savedRestaurants,
+    String userId,
+  ) {
+    if (store.isLoading && savedRestaurants.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (store.hasError && savedRestaurants.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Couldn't load saved restaurants.",
+              style: TextStyle(color: _textGray, fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => store.load(),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (savedRestaurants.isEmpty) {
+      return const _EmptySavedRestaurants();
+    }
+
+    return ListView.separated(
+      itemCount: savedRestaurants.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 15),
+      itemBuilder: (context, index) {
+        final restaurant = savedRestaurants[index];
+        return _SavedRestaurantCard(
+          restaurant: restaurant,
+          userId: userId,
         );
       },
     );
@@ -328,21 +361,34 @@ class _RestaurantThumbnail extends StatelessWidget {
         ),
       ),
       child: imagePath != null && imagePath.isNotEmpty
-          ? Image.asset(
-              imagePath,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.restaurant_rounded,
-                size: 30,
-                color: Colors.white,
-              ),
-            )
+          ? _buildImage(imagePath)
           : const Icon(
               Icons.restaurant_rounded,
               size: 30,
               color: Colors.white,
             ),
     );
+  }
+
+  Widget _buildImage(String path) {
+    const fallback = Icon(
+      Icons.restaurant_rounded,
+      size: 30,
+      color: Colors.white,
+    );
+    // 백엔드 이미지는 URL이고, 기존 mock은 asset 경로였다. 둘 다 지원.
+    final isNetwork = path.startsWith('http://') || path.startsWith('https://');
+    return isNetwork
+        ? Image.network(
+            path,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => fallback,
+          )
+        : Image.asset(
+            path,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => fallback,
+          );
   }
 
   String? _readImagePath(Restaurant restaurant) {

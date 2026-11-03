@@ -41,6 +41,9 @@ class ReservationChangeRequest {
 }
 
 class ReservationData {
+  /// 백엔드 예약 PK. 생명주기 엔드포인트(cancel/request-change 등) 호출에 사용.
+  final int? id;
+
   final DateTime date;
   final DateTime time;
   final int partySize;
@@ -52,6 +55,9 @@ class ReservationData {
   final String? seatType;
   final String confirmationCode;
 
+  /// 예약 상태: pending / confirmed / completed / cancelled / rejected
+  final String status;
+
   final String? paymentMethodId;
   final String? paymentMethodLabel;
 
@@ -61,6 +67,7 @@ class ReservationData {
   final ReservationChangeRequest? pendingChange;
 
   const ReservationData({
+    this.id,
     required this.restaurantName,
     this.restaurantId,
     required this.date,
@@ -69,13 +76,17 @@ class ReservationData {
     required this.guestName,
     this.seatType,
     this.confirmationCode = 'Yumbook-B-00001',
+    this.status = 'confirmed',
     this.paymentMethodId,
     this.paymentMethodLabel,
     this.paymentSnapshot,
     this.pendingChange,
   });
 
+  bool get isCancelled => status == 'cancelled' || status == 'rejected';
+
   ReservationData copyWith({
+    int? id,
     DateTime? date,
     DateTime? time,
     int? partySize,
@@ -84,6 +95,7 @@ class ReservationData {
     String? guestName,
     String? seatType,
     String? confirmationCode,
+    String? status,
     ReservationPaymentSnapshot? paymentSnapshot,
     String? paymentMethodId,
     String? paymentMethodLabel,
@@ -95,6 +107,7 @@ class ReservationData {
     bool clearPendingChange = false,
   }) {
     return ReservationData(
+      id: id ?? this.id,
       restaurantName: restaurantName ?? this.restaurantName,
       restaurantId: restaurantId ?? this.restaurantId,
       date: date ?? this.date,
@@ -103,6 +116,7 @@ class ReservationData {
       guestName: guestName ?? this.guestName,
       seatType: seatType ?? this.seatType,
       confirmationCode: confirmationCode ?? this.confirmationCode,
+      status: status ?? this.status,
       paymentMethodId: paymentMethodId ?? this.paymentMethodId,
       paymentMethodLabel: paymentMethodLabel ?? this.paymentMethodLabel,
       paymentSnapshot: paymentSnapshot ?? this.paymentSnapshot,

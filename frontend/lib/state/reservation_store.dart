@@ -19,6 +19,8 @@ class NotifyRequest {
   });
 }
 
+/// 예약 스토어. 목록 조회/생성 및 생명주기(취소/변경요청/승인/거절)를
+/// 모두 백엔드(`/api/reservations/`)로 위임한다. 인메모리 변경 로직은 없다.
 class ReservationStore extends ChangeNotifier {
   ReservationStore._();
   static final ReservationStore instance = ReservationStore._();
@@ -27,18 +29,25 @@ class ReservationStore extends ChangeNotifier {
   final List<NotifyRequest> _notifyRequests = [];
   final DjangoReservationApi _api = DjangoReservationApi();
   bool _isLoading = false;
+  bool _isMutating = false;
+  Object? _lastError;
 
   List<ReservationData> get reservations => List.unmodifiable(_reservations);
   List<NotifyRequest> get notifyRequests => List.unmodifiable(_notifyRequests);
   bool get isLoading => _isLoading;
+  bool get isMutating => _isMutating;
+  Object? get lastError => _lastError;
 
   Future<void> loadReservations() async {
     final token = _currentAccessToken();
     if (token == null) {
-      throw StateError('No Supabase session — sign in before loading reservations.');
+      throw StateError(
+        'No Supabase session — sign in before loading reservations.',
+      );
     }
 
     _isLoading = true;
+    _lastError = null;
     notifyListeners();
 
     try {
@@ -46,30 +55,13 @@ class ReservationStore extends ChangeNotifier {
       _reservations
         ..clear()
         ..addAll(loaded);
+    } catch (error) {
+      _lastError = error;
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
-  }
-
-  /// ✅ 디버그용: Upcoming 테스트 예약 1개 생성
-  void addMockReservation() {
-    final now = DateTime.now();
-
-    final mock = ReservationData(
-      restaurantName: 'Cafe Um (Mock)',
-      restaurantId: 'cafe_um_mock',
-      date: DateTime(now.year, now.month, now.day + 3),
-      time: DateTime(now.year, now.month, now.day, 19, 0),
-      partySize: 2,
-      guestName: 'Youri',
-      seatType: 'Table',
-      confirmationCode: 'YB-${now.millisecondsSinceEpoch}',
-      paymentSnapshot: null,
-      pendingChange: null,
-    );
-
-    addReservation(mock);
   }
 
   void addReservation(ReservationData data) {
@@ -78,11 +70,7 @@ class ReservationStore extends ChangeNotifier {
   }
 
   Future<ReservationData> createReservation(ReservationData data) async {
-    final token = _currentAccessToken();
-    if (token == null) {
-      throw StateError('No Supabase session — sign in before creating a reservation.');
-    }
-
+    final token = _requireToken('create a reservation');
     final saved = await _api.createReservation(
       reservation: data,
       accessToken: token,
@@ -91,14 +79,89 @@ class ReservationStore extends ChangeNotifier {
     return saved;
   }
 
-  String? _currentAccessToken() {
-    return Supabase.instance.client.auth.currentSession?.accessToken;
+  // ----- 생명주기 (백엔드 API) -----
+
+  /// 예약 취소. POST /api/reservations/{id}/cancel/
+  Future<void> cancelReservation(
+    ReservationData reservation, {
+    String reason = '',
+  }) async {
+    final token = _requireToken('cancel a reservation');
+    final id = _requireId(reservation);
+
+    await _runMutation(() async {
+      final updated = await _api.cancelReservation(
+        id: id,
+        reason: reason,
+        accessToken: token,
+      );
+      _replace(updated);
+    });
   }
 
-  void removeReservationByConfirmation(String confirmationCode) {
-    _reservations.removeWhere((r) => r.confirmationCode == confirmationCode);
+  /// 변경 요청 생성. POST /api/reservations/{id}/request-change/
+  Future<void> requestReservationChange(
+    ReservationData reservation, {
+    required DateTime newDate,
+    required DateTime newTime,
+    required int newPartySize,
+  }) async {
+    final token = _requireToken('request a reservation change');
+    final id = _requireId(reservation);
+
+    await _runMutation(() async {
+      final updated = await _api.requestChange(
+        id: id,
+        date: newDate,
+        time: newTime,
+        partySize: newPartySize,
+        accessToken: token,
+      );
+      _replace(updated);
+    });
+  }
+
+  /// 변경 승인(식당/관리자). POST /api/reservations/{id}/approve-change/
+  Future<void> approveReservationChange(ReservationData reservation) async {
+    final token = _requireToken('approve a change');
+    final id = _requireId(reservation);
+
+    await _runMutation(() async {
+      final updated = await _api.approveChange(id: id, accessToken: token);
+      _replace(updated);
+    });
+  }
+
+  /// 변경 거절(식당/관리자). POST /api/reservations/{id}/reject-change/
+  Future<void> rejectReservationChange(ReservationData reservation) async {
+    final token = _requireToken('reject a change');
+    final id = _requireId(reservation);
+
+    await _runMutation(() async {
+      final updated = await _api.rejectChange(id: id, accessToken: token);
+      _replace(updated);
+    });
+  }
+
+  /// 예약 시각 기준 24시간 이상 남아 있어야 변경 가능(서버에서도 동일하게 강제).
+  bool canEditReservation(ReservationData reservation) {
+    final hoursLeft = _reservationDateTime(
+      reservation,
+    ).difference(DateTime.now()).inHours;
+    return hoursLeft >= 24;
+  }
+
+  /// 승인/거절 배너를 노출한 뒤 화면에서 pending 표시를 숨기기 위한 로컬 정리(서버 무관).
+  void clearReservationChange(String confirmationCode) {
+    final idx = _reservations.indexWhere(
+      (r) => r.confirmationCode == confirmationCode,
+    );
+    if (idx == -1) return;
+    _reservations[idx] = _reservations[idx].copyWith(clearPendingChange: true);
     notifyListeners();
   }
+
+  // ----- Notify (waitlist) — 로컬 전용(백엔드 미구현) -----
 
   void addNotifyRequest(NotifyRequest req) {
     _notifyRequests.insert(0, req);
@@ -110,135 +173,11 @@ class ReservationStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// ✅ 예약 취소: confirmationCode 기준으로 삭제
-  void cancelReservation(ReservationData reservation) {
-    removeReservationByConfirmation(reservation.confirmationCode);
-  }
+  // ----- 목록 분리 (취소/거절 제외) -----
 
-  /// ✅ 예약 변경 가능 여부
-  /// 예약 시각 기준 24시간 이상 남아 있어야 변경 가능
-  bool canEditReservation(ReservationData reservation) {
-    final hoursLeft = _reservationDateTime(
-      reservation,
-    ).difference(DateTime.now()).inHours;
-    return hoursLeft >= 24;
-  }
-
-  /// ✅ 기존 방식 유지: 즉시 예약 변경
-  /// 지금은 호환용으로 남겨두고, 실제 UX는 requestReservationChange 사용 권장
-  void updateReservation(
-    ReservationData reservation, {
-    DateTime? newDate,
-    DateTime? newTime,
-    int? newPartySize,
-  }) {
-    final idx = _reservations.indexWhere(
-      (r) => r.confirmationCode == reservation.confirmationCode,
-    );
-    if (idx == -1) return;
-
-    final current = _reservations[idx];
-
-    if (!canEditReservation(current)) return;
-
-    final updated = current.copyWith(
-      date: newDate,
-      time: newTime,
-      partySize: newPartySize,
-    );
-
-    _reservations[idx] = updated;
-    notifyListeners();
-  }
-
-  /// ✅ 권장 방식: 변경 요청 저장
-  /// 실제 예약값은 바로 바꾸지 않고 pendingChange에 저장
-  void requestReservationChange(
-    ReservationData reservation, {
-    required DateTime newDate,
-    required DateTime newTime,
-    required int newPartySize,
-  }) {
-    final idx = _reservations.indexWhere(
-      (r) => r.confirmationCode == reservation.confirmationCode,
-    );
-    if (idx == -1) return;
-
-    final current = _reservations[idx];
-
-    if (!canEditReservation(current)) return;
-
-    _reservations[idx] = current.copyWith(
-      pendingChange: ReservationChangeRequest(
-        requestedDate: newDate,
-        requestedTime: newTime,
-        requestedPartySize: newPartySize,
-        requestedAt: DateTime.now(),
-        status: ReservationChangeStatus.pending,
-      ),
-    );
-
-    notifyListeners();
-  }
-
-  /// ✅ 식당 승인 시: 실제 예약값 반영
-  void approveReservationChange(String confirmationCode) {
-    final idx = _reservations.indexWhere(
-      (r) => r.confirmationCode == confirmationCode,
-    );
-    if (idx == -1) return;
-
-    final current = _reservations[idx];
-    final pending = current.pendingChange;
-    if (pending == null) return;
-
-    _reservations[idx] = current.copyWith(
-      date: pending.requestedDate,
-      time: pending.requestedTime,
-      partySize: pending.requestedPartySize,
-      pendingChange: pending.copyWith(status: ReservationChangeStatus.approved),
-    );
-
-    notifyListeners();
-  }
-
-  /// ✅ 식당 거절 시: 예약 원본은 유지, 상태만 rejected 처리
-  void rejectReservationChange(String confirmationCode) {
-    final idx = _reservations.indexWhere(
-      (r) => r.confirmationCode == confirmationCode,
-    );
-    if (idx == -1) return;
-
-    final current = _reservations[idx];
-    final pending = current.pendingChange;
-    if (pending == null) return;
-
-    _reservations[idx] = current.copyWith(
-      pendingChange: pending.copyWith(status: ReservationChangeStatus.rejected),
-    );
-
-    notifyListeners();
-  }
-
-  /// ✅ 상태 정리용
-  /// approved/rejected 문구를 보여준 뒤 pending 정보를 지우고 싶을 때 사용
-  void clearReservationChange(String confirmationCode) {
-    final idx = _reservations.indexWhere(
-      (r) => r.confirmationCode == confirmationCode,
-    );
-    if (idx == -1) return;
-
-    final current = _reservations[idx];
-
-    _reservations[idx] = current.copyWith(clearPendingChange: true);
-
-    notifyListeners();
-  }
-
-  // 편의: Upcoming/Past 분리
   List<ReservationData> upcoming(DateTime now) {
     return _reservations
-        .where((r) => _reservationDateTime(r).isAfter(now))
+        .where((r) => !r.isCancelled && _reservationDateTime(r).isAfter(now))
         .toList()
       ..sort(
         (a, b) => _reservationDateTime(a).compareTo(_reservationDateTime(b)),
@@ -247,21 +186,68 @@ class ReservationStore extends ChangeNotifier {
 
   List<ReservationData> past(DateTime now) {
     return _reservations
-        .where((r) => !_reservationDateTime(r).isAfter(now))
+        .where((r) => !r.isCancelled && !_reservationDateTime(r).isAfter(now))
         .toList()
       ..sort(
         (a, b) => _reservationDateTime(b).compareTo(_reservationDateTime(a)),
       );
   }
 
-  DateTime reservationDateTime(ReservationData r) {
-    return DateTime(
-      r.date.year,
-      r.date.month,
-      r.date.day,
-      r.time.hour,
-      r.time.minute,
-    );
+  DateTime reservationDateTime(ReservationData r) => _reservationDateTime(r);
+
+  // ----- helpers -----
+
+  Future<void> _runMutation(Future<void> Function() action) async {
+    _isMutating = true;
+    _lastError = null;
+    notifyListeners();
+    try {
+      await action();
+    } catch (error) {
+      _lastError = error;
+      rethrow;
+    } finally {
+      _isMutating = false;
+      notifyListeners();
+    }
+  }
+
+  /// 서버가 돌려준 최신 예약으로 로컬 목록을 갱신한다(id 우선, 없으면 confirmationCode).
+  void _replace(ReservationData updated) {
+    int idx = -1;
+    if (updated.id != null) {
+      idx = _reservations.indexWhere((r) => r.id == updated.id);
+    }
+    if (idx == -1) {
+      idx = _reservations.indexWhere(
+        (r) => r.confirmationCode == updated.confirmationCode,
+      );
+    }
+    if (idx == -1) {
+      _reservations.insert(0, updated);
+    } else {
+      _reservations[idx] = updated;
+    }
+  }
+
+  String _requireToken(String action) {
+    final token = _currentAccessToken();
+    if (token == null) {
+      throw StateError('No Supabase session — sign in to $action.');
+    }
+    return token;
+  }
+
+  int _requireId(ReservationData reservation) {
+    final id = reservation.id;
+    if (id == null) {
+      throw StateError('Reservation id is missing; reload reservations first.');
+    }
+    return id;
+  }
+
+  String? _currentAccessToken() {
+    return Supabase.instance.client.auth.currentSession?.accessToken;
   }
 
   DateTime _reservationDateTime(ReservationData r) {

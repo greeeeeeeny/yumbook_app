@@ -81,6 +81,81 @@ class DjangoReservationApi {
     return reservationFromJson(decoded as Map<String, dynamic>);
   }
 
+  /// POST /api/reservations/{id}/cancel/
+  Future<ReservationData> cancelReservation({
+    required int id,
+    required String accessToken,
+    String reason = '',
+  }) async {
+    return _lifecycle(
+      path: '/api/reservations/$id/cancel/',
+      accessToken: accessToken,
+      body: {'reason': reason},
+    );
+  }
+
+  /// POST /api/reservations/{id}/request-change/  (201)
+  Future<ReservationData> requestChange({
+    required int id,
+    required DateTime date,
+    required DateTime time,
+    required int partySize,
+    required String accessToken,
+  }) async {
+    return _lifecycle(
+      path: '/api/reservations/$id/request-change/',
+      accessToken: accessToken,
+      body: {
+        'requested_date': _dateToJson(date),
+        'requested_time': _timeToJson(time),
+        'requested_party_size': partySize,
+      },
+      expectStatus: 201,
+    );
+  }
+
+  /// POST /api/reservations/{id}/approve-change/
+  Future<ReservationData> approveChange({
+    required int id,
+    required String accessToken,
+  }) async {
+    return _lifecycle(
+      path: '/api/reservations/$id/approve-change/',
+      accessToken: accessToken,
+    );
+  }
+
+  /// POST /api/reservations/{id}/reject-change/
+  Future<ReservationData> rejectChange({
+    required int id,
+    required String accessToken,
+  }) async {
+    return _lifecycle(
+      path: '/api/reservations/$id/reject-change/',
+      accessToken: accessToken,
+    );
+  }
+
+  Future<ReservationData> _lifecycle({
+    required String path,
+    required String accessToken,
+    Map<String, dynamic>? body,
+    int expectStatus = 200,
+  }) async {
+    final response = await _client.post(
+      _uri(path),
+      headers: _authHeaders(accessToken),
+      body: jsonEncode(body ?? const {}),
+    );
+
+    final decoded = _decode(response);
+    if (response.statusCode != expectStatus) {
+      throw DjangoApiException(response.statusCode, decoded.toString());
+    }
+
+    return reservationFromJson(decoded as Map<String, dynamic>);
+  }
+
   Map<String, dynamic> reservationToJson(ReservationData reservation) {
     return {
       'restaurant_id': reservation.restaurantId,
@@ -95,6 +170,7 @@ class DjangoReservationApi {
 
   ReservationData reservationFromJson(Map<String, dynamic> json) {
     return ReservationData(
+      id: json['id'] as int?,
       restaurantName: json['restaurant_name'] as String? ?? '',
       restaurantId: json['restaurant_id'] as String?,
       date: _dateFromJson(json['date'] as String),
@@ -104,7 +180,37 @@ class DjangoReservationApi {
       seatType: json['seat_type'] as String?,
       confirmationCode:
           json['confirmation_code'] as String? ?? 'Yumbook-B-00001',
+      status: json['status'] as String? ?? 'confirmed',
+      pendingChange: _pendingChangeFromJson(
+        json['pending_change'] as Map<String, dynamic>?,
+      ),
     );
+  }
+
+  ReservationChangeRequest? _pendingChangeFromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    return ReservationChangeRequest(
+      requestedDate: _dateFromJson(json['requested_date'] as String),
+      requestedTime: _timeFromJson(json['requested_time'] as String),
+      requestedPartySize: json['requested_party_size'] as int? ?? 1,
+      requestedAt:
+          DateTime.tryParse(json['requested_at'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      status: _changeStatusFromString(json['status'] as String?),
+    );
+  }
+
+  ReservationChangeStatus _changeStatusFromString(String? value) {
+    switch (value) {
+      case 'pending':
+        return ReservationChangeStatus.pending;
+      case 'approved':
+        return ReservationChangeStatus.approved;
+      case 'rejected':
+        return ReservationChangeStatus.rejected;
+      default:
+        return ReservationChangeStatus.none;
+    }
   }
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {

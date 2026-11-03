@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 
-import 'package:yumbook_app/data/mock_restaurants.dart';
+import 'package:yumbook_app/models/restaurant.dart';
+import 'package:yumbook_app/state/explore_store.dart';
 
 /// 1) 가격 레벨
 enum PriceLevel { any, w1, w2, w3, w4 }
@@ -72,6 +73,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   LatLng _current = const LatLng(37.5665, 126.9780); // fallback: 서울시청
   bool _hasUserLocation = false;
+  String _lastQuery = '';
 
   Set<Marker> _markers = {};
   final GlobalKey _cuisineChipKey = GlobalKey(); // ✅ 추가 (팝업메뉴 위치 계산용)
@@ -84,8 +86,46 @@ class _ExploreScreenState extends State<ExploreScreen> {
     'assets/icons/restaurant_pin.png', // ✅ 실제 파일명(소문자)로 통일!
   );
 
-  _setMarkersFromMock();
+  await _runSearch();
 }
+
+  /// 가격 티어 → 백엔드 price 파라미터(1~4). any면 null.
+  int? _priceLevelValue(PriceLevel level) {
+    switch (level) {
+      case PriceLevel.any:
+        return null;
+      case PriceLevel.w1:
+        return 1;
+      case PriceLevel.w2:
+        return 2;
+      case PriceLevel.w3:
+        return 3;
+      case PriceLevel.w4:
+        return 4;
+    }
+  }
+
+  /// 현재 필터 + (선택적으로) 지도 영역으로 백엔드 검색을 실행한다.
+  Future<void> _runSearch({bool useMapArea = false, String? query}) async {
+    if (query != null) _lastQuery = query;
+
+    String? bbox;
+    if (useMapArea && _controller != null) {
+      final b = await _controller!.getVisibleRegion();
+      bbox =
+          '${b.southwest.longitude},${b.southwest.latitude},'
+          '${b.northeast.longitude},${b.northeast.latitude}';
+    }
+
+    await ExploreStore.instance.search(
+      query: _lastQuery,
+      cuisine: filters.cuisine == 'Cuisines' ? null : filters.cuisine,
+      priceLevel: _priceLevelValue(filters.price),
+      bbox: bbox,
+    );
+
+    _setMarkersFromResults();
+  }
 
   // Cuisine 드롭다운(1번 이미지 오른쪽 메뉴 느낌)
   final List<String> cuisines = const [
@@ -133,13 +173,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
     _preparePinsAndMarkers();
   }
 
-// ✅ mockRestaurants에 lat/lng가 있는 것만 마커 생성
-void _setMarkersFromMock() {
+// ✅ 검색 결과(lat/lng 있는 식당)로 마커 생성
+void _setMarkersFromResults() {
   if (_restaurantPin == null) return;
 
   final markers = <Marker>{};
 
-  for (final r in mockRestaurants) {
+  for (final r in ExploreStore.instance.results) {
     if (r.lat == null || r.lng == null) continue;
 
     markers.add(
@@ -156,7 +196,7 @@ void _setMarkersFromMock() {
     );
   }
 
-  setState(() => _markers = markers);
+  if (mounted) setState(() => _markers = markers);
 }
 
   String _dateLabel(DateTime d) {
@@ -191,7 +231,7 @@ void _setMarkersFromMock() {
 
     if (result != null) {
       setState(() => filters = result);
-      // TODO: 여기서 실제 검색/필터링 트리거
+      _runSearch();
     }
   }
 
@@ -210,7 +250,7 @@ void _setMarkersFromMock() {
 
     if (selected != null) {
       setState(() => filters = filters.copyWith(cuisine: selected == 'All' ? 'Cuisines' : selected));
-      // TODO: 필터링 트리거
+      _runSearch();
     }
   }
 
@@ -255,6 +295,7 @@ void _setMarkersFromMock() {
           cuisine: selected == 'All' ? 'Cuisines' : selected,
         );
       });
+      _runSearch();
     }
   }
 
@@ -271,7 +312,7 @@ void _setMarkersFromMock() {
 
     if (selected != null) {
       setState(() => filters = filters.copyWith(price: selected));
-      // TODO: 필터링 트리거
+      _runSearch();
     }
   }
 
@@ -288,12 +329,12 @@ void _setMarkersFromMock() {
         popular: const ['Italian'],
         recentlyViewed: nearbyMock,
         onPickQuery: (query) {
-          // TODO: query로 검색해서 지도/리스트 업데이트
           Navigator.pop(context);
+          _runSearch(query: query);
         },
         onPickCurrentMapArea: () {
-          // TODO: 현재 지도 중심 기반 검색
           Navigator.pop(context);
+          _runSearch(useMapArea: true);
         },
       ),
     );
@@ -377,11 +418,7 @@ void _setMarkersFromMock() {
             right: 100,
               child: _PillButton(
                 text: 'Search this area',
-                onTap: () async {
-                  if (_controller == null) return;
-                  final bounds = await _controller!.getVisibleRegion();
-                  // TODO: bounds 기준으로 식당 검색
-                },
+                onTap: () => _runSearch(useMapArea: true),
               ),
             ),
 
@@ -530,39 +567,107 @@ void _setMarkersFromMock() {
 
                   /// ✅ 결과 영역: DraggableScrollableSheet의 scrollCtrl에 연결
                   Expanded(
-                    child: ListView(
-                      controller: scrollCtrl, // ✅ 필수
-                      children: [
-                        const SizedBox(height: 60),
-                        const Center(
-                          child: Text(
-                            'No results found\nTry adjusting your search, filters, or zoom out.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontFamily: 'Pretendard',
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF6E6E6E),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Center(
-                          child: TextButton(
-                            onPressed: _resetFilters,
-                            child: const Text(
-                              'Reset',
-                              style: TextStyle(
-                                fontFamily: 'Pretendard',
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFFD45425),
+                    child: AnimatedBuilder(
+                      animation: ExploreStore.instance,
+                      builder: (context, _) {
+                        final store = ExploreStore.instance;
+
+                        if (store.isLoading) {
+                          return ListView(
+                            controller: scrollCtrl,
+                            children: const [
+                              SizedBox(height: 80),
+                              Center(child: CircularProgressIndicator()),
+                            ],
+                          );
+                        }
+
+                        if (store.hasError) {
+                          return ListView(
+                            controller: scrollCtrl,
+                            children: [
+                              const SizedBox(height: 60),
+                              const Center(
+                                child: Text(
+                                  "Couldn't load restaurants.\nPlease check your connection and try again.",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontFamily: 'Pretendard',
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF6E6E6E),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 120), // 아래 여백(드래그 감/스크롤 여유)
-                      ],
+                              const SizedBox(height: 18),
+                              Center(
+                                child: TextButton(
+                                  onPressed: () => _runSearch(),
+                                  child: const Text(
+                                    'Retry',
+                                    style: TextStyle(
+                                      fontFamily: 'Pretendard',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFD45425),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+
+                        final results = store.results;
+                        if (results.isEmpty) {
+                          return ListView(
+                            controller: scrollCtrl,
+                            children: [
+                              const SizedBox(height: 60),
+                              const Center(
+                                child: Text(
+                                  'No results found\nTry adjusting your search, filters, or zoom out.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontFamily: 'Pretendard',
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF6E6E6E),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              Center(
+                                child: TextButton(
+                                  onPressed: () {
+                                    _resetFilters();
+                                    _runSearch();
+                                  },
+                                  child: const Text(
+                                    'Reset',
+                                    style: TextStyle(
+                                      fontFamily: 'Pretendard',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFD45425),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 120),
+                            ],
+                          );
+                        }
+
+                        return ListView.separated(
+                          controller: scrollCtrl,
+                          itemCount: results.length,
+                          separatorBuilder: (_, __) =>
+                              const Divider(height: 1, color: Color(0xFFE5E5E5)),
+                          itemBuilder: (context, i) =>
+                              _ExploreResultRow(restaurant: results[i]),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -1286,6 +1391,92 @@ class _RestaurantListItem {
     required this.subtitle,
     required this.imageUrl,
   });
+}
+
+/// Explore 결과 한 줄(백엔드 Restaurant 기반).
+class _ExploreResultRow extends StatelessWidget {
+  final Restaurant restaurant;
+
+  const _ExploreResultRow({required this.restaurant});
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitleParts = <String>[
+      if ((restaurant.rawCategory ?? '').isNotEmpty) restaurant.rawCategory!,
+      if (restaurant.location.isNotEmpty) restaurant.location,
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD5EAF7),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: restaurant.imagePath.isNotEmpty
+                ? Image.network(
+                    restaurant.imagePath,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.restaurant_rounded,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.restaurant_rounded, color: Colors.white),
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  restaurant.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF383838),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  subtitleParts.join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w400,
+                    color: Color(0xFF6E6E6E),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (restaurant.rating > 0) ...[
+            const Icon(Icons.star_rounded, size: 18, color: Color(0xFFD45425)),
+            const SizedBox(width: 2),
+            Text(
+              restaurant.rating.toStringAsFixed(1),
+              style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF383838),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _RestaurantRow extends StatelessWidget {

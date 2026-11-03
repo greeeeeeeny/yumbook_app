@@ -1,0 +1,13 @@
+name,region,category,image_url,address,description,rating,price_level,latitude,longitude
+1993 Gogi,insadong,Korean BBQ,https://placehold.co/600x400?text=1993+Gogi,"Insadong, Seoul","Korean barbecue popular for juicy samgyeopsal and tender moksal.",4.5,2,37.5740,126.9850
+Osegyehyang,insadong,Vegetarian,https://placehold.co/600x400?text=Osegyehyang,"Insadong, Seoul","Long-loved vegetarian spot serving hearty plant-based Korean dishes.",4.3,2,37.5732,126.9869
+Insadong Tea House,insadong,Cafe,https://placehold.co/600x400?text=Tea+House,"Insadong, Seoul","Traditional tea house with quiet courtyard seating.",4.1,1,37.5719,126.9858
+Alpero,hongdae,Italian,https://placehold.co/600x400?text=Alpero,"Hongdae, Seoul","Cozy Italian restaurant serving authentic pasta and wine.",4.4,3,37.5563,126.9220
+Midnight Ramyun,hongdae,Ramen,https://placehold.co/600x400?text=Midnight+Ramyun,"Hongdae, Seoul","Late-night noodle bar famous for rich tonkotsu broth.",4.1,1,37.5550,126.9240
+Sourdough Pizza Lab,hongdae,Italian,https://placehold.co/600x400?text=Pizza+Lab,"Hongdae, Seoul","Neighborhood pizzeria specializing in slow-fermented sourdough crust.",4.2,2,37.5571,126.9237
+Casa Mezcal,itaewon,Mexican,https://placehold.co/600x400?text=Casa+Mezcal,"Itaewon, Seoul","Vibrant taqueria pouring agave spirits alongside street-style tacos.",4.2,2,37.5340,126.9945
+Itaewon Kebab House,itaewon,Middle Eastern,https://placehold.co/600x400?text=Kebab+House,"Itaewon, Seoul","Halal-friendly grill known for charcoal kebabs and fresh flatbread.",4.0,1,37.5345,126.9942
+Daelim Warehouse,seongsu,Brunch Cafe,https://placehold.co/600x400?text=Daelim+Warehouse,"Seongsu, Seoul","Industrial-chic brunch spot inside a converted warehouse.",4.6,2,37.5445,127.0557
+Seongsu Coffee Lab,seongsu,Cafe,https://placehold.co/600x400?text=Coffee+Lab,"Seongsu, Seoul","Specialty roastery pulling single-origin espresso and pour-overs.",4.5,2,37.5450,127.0561
+Hanok Table,gangnam,Korean Fine Dining,https://placehold.co/600x400?text=Hanok+Table,"Gangnam, Seoul","Refined hanjeongsik course menu showcasing seasonal Korean ingredients.",4.7,4,37.4979,127.0276
+Gangnam Sushi Omakase,gangnam,Japanese,https://placehold.co/600x400?text=Sushi+Omakase,"Gangnam, Seoul","Intimate omakase counter serving chef-selected nigiri.",4.8,4,37.4990,127.0290

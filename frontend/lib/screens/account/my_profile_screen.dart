@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:yumbook_app/models/dining_preferences.dart';
 import 'package:yumbook_app/screens/account/dining_preferences_flow_screen.dart';
+import 'package:yumbook_app/state/dining_preferences_store.dart';
 import 'package:yumbook_app/state/user_profile_store.dart';
 import 'package:yumbook_app/screens/account/profile_edit_screen.dart';
 
@@ -16,12 +17,12 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   static const Color _textGray = Color(0xFF9AA0A6);
   static const Color _sectionBg = Color(0xFFF2F2F7);
 
-  DiningPreferences _preferences = const DiningPreferences(
-    favoriteCuisines: ['Vegetarian / Vegan'],
-    diningStyles: ['Casual dining'],
-    dietaryRestrictions: ['Gluten-free'],
-    additionalNotes: 'No spicy food',
-  );
+  @override
+  void initState() {
+    super.initState();
+    UserProfileStore.instance.ensureLoaded();
+    DiningPreferencesStore.instance.ensureLoaded();
+  }
 
   void _goToProfileEdit() {
     Navigator.push(
@@ -56,21 +57,17 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   }
 
   Future<void> _openDiningPreferences(int initialStep) async {
-    final result = await Navigator.push<DiningPreferences>(
+    // 저장은 플로우 화면이 DiningPreferencesStore로 처리한다.
+    // 여기서는 현재 선호값을 초기 데이터로 넘기기만 하면 된다.
+    await Navigator.push<DiningPreferences>(
       context,
       MaterialPageRoute(
         builder: (_) => DiningPreferencesFlowScreen(
           initialStep: initialStep,
-          initialData: _preferences,
+          initialData: DiningPreferencesStore.instance.preferences,
         ),
       ),
     );
-
-    if (result != null) {
-      setState(() {
-        _preferences = result;
-      });
-    }
   }
 
   String _joinOrFallback(List<String> items) {
@@ -86,9 +83,13 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: UserProfileStore.instance,
+      animation: Listenable.merge([
+        UserProfileStore.instance,
+        DiningPreferencesStore.instance,
+      ]),
       builder: (context, _) {
         final profile = UserProfileStore.instance.profile;
+        final preferences = DiningPreferencesStore.instance.preferences;
 
         return Scaffold(
           backgroundColor: Colors.white,
@@ -265,7 +266,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
                         _PreferenceCard(
                           label: 'Your favorite cuisines',
-                          value: _joinOrFallback(_preferences.favoriteCuisines),
+                          value: _joinOrFallback(preferences.favoriteCuisines),
                           showArrow: true,
                           onTap: () => _openDiningPreferences(0),
                         ),
@@ -273,7 +274,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
                         _PreferenceCard(
                           label: 'Your hospitality preferences',
-                          value: _joinOrFallback(_preferences.diningStyles),
+                          value: _joinOrFallback(preferences.diningStyles),
                           showArrow: true,
                           onTap: () => _openDiningPreferences(1),
                         ),
@@ -282,7 +283,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                         _PreferenceCard(
                           label: 'Your dietary restrictions',
                           value:
-                              _joinOrFallback(_preferences.dietaryRestrictions),
+                              _joinOrFallback(preferences.dietaryRestrictions),
                           showArrow: true,
                           onTap: () => _openDiningPreferences(2),
                         ),
@@ -290,7 +291,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
                         _PreferenceCard(
                           label: 'Additional dietary notes',
-                          value: _notesOrFallback(_preferences.additionalNotes),
+                          value: _notesOrFallback(preferences.additionalNotes),
                           showArrow: true,
                           onTap: () => _openDiningPreferences(3),
                         ),

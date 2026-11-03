@@ -1,17 +1,14 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:yumbook_app/models/food_record.dart';
+import 'package:yumbook_app/models/region.dart';
 import 'package:yumbook_app/models/restaurant.dart';
 import 'package:yumbook_app/screens/food_records/food_record_detail_screen.dart';
 import 'package:yumbook_app/screens/food_records/food_record_list_screen.dart';
+import 'package:yumbook_app/services/django_restaurant_api.dart';
 import 'package:yumbook_app/state/food_record_store.dart';
 import 'detail_screen.dart';
-
-class Category {
-  final int id;
-  final String label;
-  const Category(this.id, this.label);
-}
 
 class AHomeCategory extends StatefulWidget {
   const AHomeCategory({super.key});
@@ -25,8 +22,32 @@ class _AHomeCategoryState extends State<AHomeCategory> {
   static const Color _textMuted = Color(0xFF7A7A7A);
   static const Color _divider = Color(0xFFBDBDBD);
 
-  int activeCategory = 2;
+  /// 백엔드에서 받아온 활성 지역 목록(탭 소스). 모의 데이터는 없다.
+  List<Region> _regions = const [];
 
+  /// 지역 목록 로딩 상태(최초 로드 시 탭 영역 스피너 노출용).
+  bool _isLoadingRegions = false;
+
+  /// 지역 목록 로드 실패 여부(에러 상태 노출용). 성공 시 null.
+  Object? _regionsError;
+
+  /// 현재 선택된 지역 슬러그. 기본값은 첫 번째 지역의 슬러그.
+  /// 지역 목록 로드 전에는 null.
+  String? selectedRegion;
+
+  /// 백엔드에서 받아온, 현재 지역에 해당하는 식당 목록.
+  List<Restaurant> _visibleRestaurants = const [];
+
+  /// 지역 데이터 로딩 상태(탭 전환/최초 로드 시 스피너 노출용).
+  bool _isLoadingRestaurants = false;
+
+  /// 마지막 로드 실패 여부(에러 상태 노출용). 성공 시 null.
+  Object? _loadError;
+
+  /// 빠른 탭 연타 시 늦게 끝난 이전 요청이 결과를 덮어쓰지 않도록 하는 토큰.
+  int _filterToken = 0;
+
+  final DjangoRestaurantApi _restaurantApi = DjangoRestaurantApi();
   final ScrollController _tabScrollController = ScrollController();
 
   @override
@@ -34,7 +55,86 @@ class _AHomeCategoryState extends State<AHomeCategory> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadPublicRecords();
+      // 지역 탭을 백엔드에서 로드한 뒤, 첫 지역의 식당을 로드한다.
+      _loadRegions();
     });
+  }
+
+  /// 활성 지역 목록(`/api/regions/`)을 로드해 탭 소스를 구성한다.
+  /// 성공 시 첫 번째 지역을 기본 선택으로 두고 해당 식당을 로드한다.
+  /// 모의 데이터 폴백은 없다.
+  Future<void> _loadRegions() async {
+    setState(() {
+      _isLoadingRegions = true;
+      _regionsError = null;
+    });
+
+    try {
+      final accessToken =
+          Supabase.instance.client.auth.currentSession?.accessToken;
+      final regions = await _restaurantApi.fetchRegions(
+        accessToken: accessToken,
+      );
+      if (!mounted) return;
+
+      final firstSlug = regions.isNotEmpty ? regions.first.slug : null;
+      setState(() {
+        _regions = regions;
+        selectedRegion = firstSlug;
+        _isLoadingRegions = false;
+      });
+
+      // 지역이 하나라도 있으면 첫 지역 식당을 로드한다.
+      if (firstSlug != null) {
+        _loadRegion(firstSlug);
+      } else {
+        // 지역이 없으면 빈 식당 목록 상태로 둔다.
+        setState(() {
+          _visibleRestaurants = const [];
+          _isLoadingRestaurants = false;
+          _loadError = null;
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _regionsError = error;
+        _regions = const [];
+        _isLoadingRegions = false;
+      });
+    }
+  }
+
+  /// 선택된 지역으로 백엔드(`/api/restaurants/?region=...`)에서 식당을 로드한다.
+  /// 로딩 → 성공/빈 결과 → 에러 상태를 모두 처리한다. 모의 데이터 폴백은 없다.
+  Future<void> _loadRegion(String? region) async {
+    final token = ++_filterToken;
+    setState(() {
+      _isLoadingRestaurants = true;
+      _loadError = null;
+    });
+
+    try {
+      final accessToken =
+          Supabase.instance.client.auth.currentSession?.accessToken;
+      final results = await _restaurantApi.searchRestaurants(
+        region: region,
+        accessToken: accessToken,
+      );
+      // 위젯이 사라졌거나 더 최신 요청이 시작됐다면 이 결과는 버린다.
+      if (!mounted || token != _filterToken) return;
+      setState(() {
+        _visibleRestaurants = results;
+        _isLoadingRestaurants = false;
+      });
+    } catch (error) {
+      if (!mounted || token != _filterToken) return;
+      setState(() {
+        _loadError = error;
+        _visibleRestaurants = const [];
+        _isLoadingRestaurants = false;
+      });
+    }
   }
 
   Future<void> _loadPublicRecords() async {
@@ -69,46 +169,15 @@ class _AHomeCategoryState extends State<AHomeCategory> {
     }
   }
 
-  final List<Category> categories = const [
-    Category(1, "CURATOR PICK"),
-    Category(2, "INSADONG"),
-    Category(3, "HONGDAE"),
-    Category(4, "ITAEWON"),
-    Category(5, "SEONGSU"),
-    Category(6, "GANGNAM"),
-    Category(7, "REGIONAL EATS"),
-    Category(8, "PLANT-BASED"),
-    Category(9, "ASIAN EATS"),
-    Category(10, "HIDDEN GEMS"),
-  ];
-
-  final List<Restaurant> restaurants = [
-    Restaurant(
-      id: 'intro',
-      name: "The easiest way to\nbook Korean dining.",
-      location: "Tell us where & when, we’ll secure the table for you.",
-      description: "Intro card",
-      imagePath: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0",
-      tags: const ["INTRO"],
-    ),
-    Restaurant(
-      id: 'r001',
-      name: "1993 Gogi",
-      location: "Near Hoegi Station, Seoul",
-      description:
-          "1993 Gogi is a Korean barbecue restaurant popular for its juicy Samgyeopsal (pork belly), tender Moksal (pork neck), and chewy Jjonddeuksal (special pork cut).",
-      imagePath: "https://images.unsplash.com/photo-1544025162-d76694265947",
-      tags: const ["₩₩", "Korean food", "Hidden Gems"],
-    ),
-    Restaurant(
-      id: 'r002',
-      name: "Alpero",
-      location: "Near Hoegi Station, Seoul",
-      description: "A cozy Italian restaurant serving authentic pasta and wine.",
-      imagePath: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
-      tags: const ["₩₩₩", "Italian", "Date Night"],
-    ),
-  ];
+  /// 지역과 무관하게 항상 상단에 고정되는 인트로(히어로) 카드.
+  static const Restaurant _introCard = Restaurant(
+    id: 'intro',
+    name: "The easiest way to\nbook Korean dining.",
+    location: "Tell us where & when, we’ll secure the table for you.",
+    description: "Intro card",
+    imagePath: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0",
+    tags: ["INTRO"],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -139,21 +208,19 @@ class _AHomeCategoryState extends State<AHomeCategory> {
                   ),
                 ),
               ),
+              // 지역과 무관한 인트로 히어로 카드는 항상 상단에 고정.
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                sliver: SliverList.separated(
-                  itemCount: restaurants.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 28),
-                  itemBuilder: (context, index) {
-                    final restaurant = restaurants[index];
-                    return _buildArticleCard(
-                      context: context,
-                      restaurant: restaurant,
-                      isIntro: restaurant.id == 'intro',
-                    );
-                  },
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                sliver: SliverToBoxAdapter(
+                  child: _buildArticleCard(
+                    context: context,
+                    restaurant: _introCard,
+                    isIntro: true,
+                  ),
                 ),
               ),
+              // 선택된 지역으로 필터된 식당 목록 / 로딩 / 빈 상태.
+              _buildRegionListSliver(),
               SliverToBoxAdapter(child: _buildRecentRecordsSection()),
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
             ],
@@ -206,44 +273,220 @@ class _AHomeCategoryState extends State<AHomeCategory> {
       ),
       child: SizedBox(
         height: 54,
-        child: ListView.builder(
-          controller: _tabScrollController,
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          itemCount: categories.length,
-          itemBuilder: (context, index) {
-            final cat = categories[index];
-            final isActive = activeCategory == cat.id;
+        child: _buildCategoryTabsContent(),
+      ),
+    );
+  }
 
-            return GestureDetector(
-              onTap: () => setState(() => activeCategory = cat.id),
-              child: Container(
-                margin: const EdgeInsets.only(right: 22),
-                padding: const EdgeInsets.only(top: 6, bottom: 10),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isActive ? _textDark : Colors.transparent,
-                      width: 2,
-                    ),
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  cat.label,
-                  style: TextStyle(
-                    color: isActive ? _textDark : _textMuted,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w400,
-                    fontFamily: 'Pretendard',
-                    height: 1,
-                  ),
+  /// 지역 탭 영역의 본문. 로딩 / 에러 / 정상(탭 목록) 상태를 그린다.
+  Widget _buildCategoryTabsContent() {
+    if (_isLoadingRegions) {
+      return const Center(
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2.2),
+        ),
+      );
+    }
+
+    if (_regionsError != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Row(
+          children: [
+            const Icon(Icons.cloud_off_outlined, size: 18, color: _textMuted),
+            const SizedBox(width: 8),
+            const Text(
+              "Couldn't load regions.",
+              style: TextStyle(
+                color: _textMuted,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Pretendard',
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _loadRegions,
+              child: const Text(
+                'Retry',
+                style: TextStyle(
+                  color: _textDark,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Pretendard',
                 ),
               ),
-            );
-          },
+            ),
+          ],
         ),
+      );
+    }
+
+    if (_regions.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 24),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'No regions available.',
+            style: TextStyle(
+              color: _textMuted,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              fontFamily: 'Pretendard',
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      controller: _tabScrollController,
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      itemCount: _regions.length,
+      itemBuilder: (context, index) {
+        final region = _regions[index];
+        final isActive = selectedRegion == region.slug;
+
+        return GestureDetector(
+          onTap: () {
+            if (selectedRegion == region.slug) return;
+            setState(() {
+              selectedRegion = region.slug;
+            });
+            // 즉시 로딩 표시 후 백엔드에서 해당 지역 식당을 다시 로드한다.
+            _loadRegion(region.slug);
+          },
+          child: Container(
+            margin: const EdgeInsets.only(right: 22),
+            padding: const EdgeInsets.only(top: 6, bottom: 10),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: isActive ? _textDark : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              region.name,
+              style: TextStyle(
+                color: isActive ? _textDark : _textMuted,
+                fontSize: 17,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                fontFamily: 'Pretendard',
+                height: 1,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 로딩 / 에러 / 빈 상태 / 식당 목록을 상황에 맞게 그리는 sliver.
+  Widget _buildRegionListSliver() {
+    // 지역 목록 자체를 아직 못 받았거나(로딩/에러) 비어 있으면, 식당 목록 영역은
+    // 비워 둔다. 탭 영역에서 이미 상태를 표시하므로 중복 노출을 피한다.
+    if (_isLoadingRegions || _regionsError != null || _regions.isEmpty) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+
+    if (_isLoadingRestaurants) {
+      return const SliverPadding(
+        padding: EdgeInsets.fromLTRB(24, 48, 24, 48),
+        sliver: SliverToBoxAdapter(
+          child: Center(
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
+        ),
+      );
+    }
+
+    if (_loadError != null) {
+      return SliverPadding(
+        padding: const EdgeInsets.fromLTRB(24, 48, 24, 48),
+        sliver: SliverToBoxAdapter(child: _buildErrorState()),
+      );
+    }
+
+    if (_visibleRestaurants.isEmpty) {
+      return SliverPadding(
+        padding: const EdgeInsets.fromLTRB(24, 48, 24, 48),
+        sliver: SliverToBoxAdapter(child: _buildEmptyState()),
+      );
+    }
+
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+      sliver: SliverList.separated(
+        itemCount: _visibleRestaurants.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 28),
+        itemBuilder: (context, index) {
+          return _buildArticleCard(
+            context: context,
+            restaurant: _visibleRestaurants[index],
+            isIntro: false,
+          );
+        },
       ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Column(
+      children: const [
+        Icon(Icons.storefront_outlined, size: 48, color: _textMuted),
+        SizedBox(height: 12),
+        Text(
+          'No restaurants found in this area.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _textMuted,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            fontFamily: 'Pretendard',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Column(
+      children: [
+        const Icon(Icons.cloud_off_outlined, size: 48, color: _textMuted),
+        const SizedBox(height: 12),
+        const Text(
+          "Couldn't load restaurants.",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _textDark,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            fontFamily: 'Pretendard',
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Please check your connection and try again.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _textMuted,
+            fontSize: 14,
+            fontFamily: 'Pretendard',
+          ),
+        ),
+        const SizedBox(height: 16),
+        OutlinedButton(
+          onPressed: () => _loadRegion(selectedRegion),
+          child: const Text('Retry'),
+        ),
+      ],
     );
   }
 
